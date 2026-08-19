@@ -1,0 +1,15 @@
+node_modules/
+dist/
+.netlify/
+*.tsbuildinfo
+vite.config.js
+vite.config.d.ts
+.DS_Store
+.env
+.env.*
+!.env.example
+*.db
+*.sqlite
+*.sqlite3
+sync-logs/
+backups/
