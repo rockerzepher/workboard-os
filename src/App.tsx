@@ -32,7 +32,7 @@ import {
   X,
 } from "lucide-react";
 import { loadObsidianVaultHandle, readObsidianDirectory, readObsidianVault, removeObsidianVaultHandle, saveObsidianVaultHandle, type ObsidianDirectoryHandle, type ObsidianVaultPreview } from "./providers/obsidian";
-import { authorizeAndReadGoogleTasks, syntheticGoogleTasksAdapter, type GoogleTaskRecord, type GoogleTasksPreview } from "./providers/googleTasks";
+import { getGoogleStatus, readConnectedGoogleTasks, startGoogleOAuth, syntheticGoogleTasksAdapter, type GoogleTaskRecord, type GoogleTasksPreview } from "./providers/googleTasks";
 import { getNotionStatus, searchNotion, startNotionOAuth, type NotionConnectionStatus, type NotionReference } from "./providers/notion";
 
 type View = "board" | "planning_repository" | "today" | "this_week" | "projects" | "app_ideas" | "waiting_for" | "review" | "settings";
@@ -214,6 +214,7 @@ function App() {
   const [savedObsidianVault, setSavedObsidianVault] = useState<SavedObsidianVault | null>(readSavedObsidianVault);
   const [googleTasksPreview, setGoogleTasksPreview] = useState<GoogleTasksPreview | null>(null);
   const [googleTasksConnecting, setGoogleTasksConnecting] = useState(false);
+  const [googleTasksConnected, setGoogleTasksConnected] = useState(false);
   const [googleClientId, setGoogleClientId] = useState(readGoogleClientId);
   const [notionStatus, setNotionStatus] = useState<NotionConnectionStatus>({ connected: false, configured: false });
   const [notionReferences, setNotionReferences] = useState<NotionReference[]>(readNotionReferences);
@@ -233,6 +234,35 @@ function App() {
     }).catch(() => {
       // The saved folder can still be chosen again from Settings if its permission expired.
     });
+    return () => { active = false; };
+  }, []);
+
+  useEffect(() => {
+    let active = true;
+    async function restoreGoogleTasks() {
+      try {
+        const status = await getGoogleStatus();
+        if (!active) return;
+        setGoogleTasksConnected(status.connected);
+        if (!status.connected) return;
+        setGoogleTasksConnecting(true);
+        const preview = await readConnectedGoogleTasks();
+        if (active) {
+          setGoogleTasksPreview(preview);
+          mergeGoogleTasks(preview);
+        }
+      } catch {
+        if (active) setGoogleTasksConnected(false);
+      } finally {
+        if (active) setGoogleTasksConnecting(false);
+      }
+    }
+    const params = new URLSearchParams(window.location.search);
+    if (params.get("google") === "connected") {
+      window.history.replaceState({}, "", window.location.pathname);
+      flash("Google Tasks connected · restoring read-only tasks");
+    }
+    void restoreGoogleTasks();
     return () => { active = false; };
   }, []);
 
@@ -267,6 +297,33 @@ function App() {
   function flash(message: string) {
     setNotice(message);
     window.setTimeout(() => setNotice(null), 2600);
+  }
+
+  function mergeGoogleTasks(preview: GoogleTasksPreview) {
+    setTasks((current) => {
+      const existingBySource = new Map(current.filter((task) => task.sourceKey).map((task) => [task.sourceKey, task]));
+      const imported = preview.tasks.map((record) => localTaskFromGoogleRecord(record, existingBySource.get(record.sourceKey)));
+      const importedBySource = new Map(imported.map((task) => [task.sourceKey, task]));
+      const merged = current.map((task) => task.sourceKey && importedBySource.has(task.sourceKey) ? importedBySource.get(task.sourceKey)! : task);
+      const existingKeys = new Set(current.map((task) => task.sourceKey).filter(Boolean));
+      return [...merged, ...imported.filter((task) => !existingKeys.has(task.sourceKey))];
+    });
+  }
+
+  async function refreshGoogleTasks(showNotice = true) {
+    setGoogleTasksConnecting(true);
+    try {
+      const preview = await readConnectedGoogleTasks();
+      setGoogleTasksConnected(true);
+      setGoogleTasksPreview(preview);
+      mergeGoogleTasks(preview);
+      if (showNotice) flash(`Google Tasks refreshed read-only · ${preview.tasks.length} records`);
+    } catch (error) {
+      setGoogleTasksConnected(false);
+      flash(error instanceof Error ? error.message : "Google Tasks could not be restored");
+    } finally {
+      setGoogleTasksConnecting(false);
+    }
   }
 
   function toggleTask(id: string) {
@@ -354,32 +411,10 @@ function App() {
     flash(`Google Tasks dry-run ready · ${preview.tasks.length} records · no provider writes`);
   }
 
-  async function connectGoogleTasks() {
+  function connectGoogleTasks() {
     if (googleTasksConnecting) return;
-    const clientId = googleClientId.trim();
-    if (!clientId) {
-      flash("Add your Google client ID below before connecting");
-      return;
-    }
-    persistGoogleClientId(clientId);
     setGoogleTasksConnecting(true);
-    try {
-      const preview = await authorizeAndReadGoogleTasks(clientId);
-      setGoogleTasksPreview(preview);
-      setTasks((current) => {
-        const existingBySource = new Map(current.filter((task) => task.sourceKey).map((task) => [task.sourceKey, task]));
-        const imported = preview.tasks.map((record) => localTaskFromGoogleRecord(record, existingBySource.get(record.sourceKey)));
-        const importedBySource = new Map(imported.map((task) => [task.sourceKey, task]));
-        const merged = current.map((task) => task.sourceKey && importedBySource.has(task.sourceKey) ? importedBySource.get(task.sourceKey)! : task);
-        const existingKeys = new Set(current.map((task) => task.sourceKey).filter(Boolean));
-        return [...merged, ...imported.filter((task) => !existingKeys.has(task.sourceKey))];
-      });
-      flash(`Google Tasks connected read-only · ${preview.tasks.length} records`);
-    } catch (error) {
-      flash(error instanceof Error ? error.message : "Google Tasks connection failed");
-    } finally {
-      setGoogleTasksConnecting(false);
-    }
+    startGoogleOAuth();
   }
 
   function saveGoogleClientId() {
@@ -443,7 +478,7 @@ function App() {
         {view === "waiting_for" && <VerticalView view="waiting_for" tasks={filteredTasks.filter((task) => task.container === "waiting_for")} query={query} setQuery={setQuery} capture={capture} setCapture={setCapture} addCapture={addCapture} areaFilter={areaFilter} setAreaFilter={setAreaFilter} onToggle={toggleTask} onMove={moveTask} onRole={setRole} onReorder={reorderTask} onExpand={setExpandedTask} expandedTask={expandedTask} />}
         {view === "projects" && <ProjectsView tasks={tasks} selectedProject={selectedProject} setSelectedProject={setSelectedProject} onToggle={toggleTask} />}
         {view === "review" && <ReviewView tasks={tasks} navigate={navigate} onMove={moveTask} />}
-        {view === "settings" && <SettingsView flash={flash} obsidianPreview={obsidianPreview} savedObsidianVault={savedObsidianVault} onObsidianFiles={connectObsidian} onObsidianDirectoryPick={connectObsidianDirectory} onObsidianDisconnect={async () => { setObsidianPreview(null); localStorage.removeItem(OBSIDIAN_VAULT_STORAGE_KEY); setSavedObsidianVault(null); await removeObsidianVaultHandle().catch(() => undefined); flash("Obsidian disconnected · vault unchanged"); }} googleTasksPreview={googleTasksPreview} googleTasksConnecting={googleTasksConnecting} onGoogleTasksPreview={previewGoogleTasks} onGoogleTasksConnect={connectGoogleTasks} googleClientId={googleClientId} onGoogleClientIdChange={setGoogleClientId} onSaveGoogleClientId={saveGoogleClientId} notionStatus={notionStatus} notionReferences={notionReferences} notionResults={notionResults} notionQuery={notionQuery} notionSearching={notionSearching} onNotionConnect={connectNotion} onNotionQueryChange={setNotionQuery} onNotionSearch={findNotionReferences} onNotionAddReference={addNotionReference} onNotionRemoveReference={removeNotionReference} />}
+        {view === "settings" && <SettingsView flash={flash} obsidianPreview={obsidianPreview} savedObsidianVault={savedObsidianVault} onObsidianFiles={connectObsidian} onObsidianDirectoryPick={connectObsidianDirectory} onObsidianDisconnect={async () => { setObsidianPreview(null); localStorage.removeItem(OBSIDIAN_VAULT_STORAGE_KEY); setSavedObsidianVault(null); await removeObsidianVaultHandle().catch(() => undefined); flash("Obsidian disconnected · vault unchanged"); }} googleTasksPreview={googleTasksPreview} googleTasksConnected={googleTasksConnected} googleTasksConnecting={googleTasksConnecting} onGoogleTasksPreview={previewGoogleTasks} onGoogleTasksConnect={connectGoogleTasks} onGoogleTasksRefresh={() => refreshGoogleTasks()} googleClientId={googleClientId} onGoogleClientIdChange={setGoogleClientId} onSaveGoogleClientId={saveGoogleClientId} notionStatus={notionStatus} notionReferences={notionReferences} notionResults={notionResults} notionQuery={notionQuery} notionSearching={notionSearching} onNotionConnect={connectNotion} onNotionQueryChange={setNotionQuery} onNotionSearch={findNotionReferences} onNotionAddReference={addNotionReference} onNotionRemoveReference={removeNotionReference} />}
       </main>
       {notice && <div className="toast"><Check size={15} /> {notice}</div>}
     </div>
@@ -561,7 +596,7 @@ function ReviewView({ tasks, navigate, onMove }: { tasks: Task[]; navigate: (vie
   return <div className="content-wrap review-page"><PageHeader eyebrow="WORK OS / WEEKLY REVIEW" title="Review the system." description="Evidence over guilt. Make small, reversible decisions that keep the board trustworthy." actions={<button className="button dark"><RefreshCw size={15} /> Sync preview</button>} /><section className="review-banner"><div className="review-score"><span className="score-number">7</span><span>open review<br />signals</span></div><div><strong>Last reviewed 4 days ago</strong><p>Nothing will be completed, deleted, or moved in bulk from this screen.</p></div></section><div className="review-grid">{queues.map((queue) => <button className="review-card" key={queue.label} onClick={() => navigate(queue.action)}><div className="review-card-top"><span className="eyebrow">QUEUE</span><span className={`queue-count ${queue.count ? "has-items" : ""}`}>{queue.count}</span></div><h2>{queue.label}</h2><p>{queue.detail}</p><span className="review-action">Open queue <ArrowRight size={14} /></span></button>)}</div><section className="review-guardrail"><CircleHelp size={16} /><span>Review actions are local metadata changes until you explicitly choose a provider write-back.</span></section></div>;
 }
 
-function SettingsView({ flash, obsidianPreview, savedObsidianVault, onObsidianFiles, onObsidianDirectoryPick, onObsidianDisconnect, googleTasksPreview, googleTasksConnecting, onGoogleTasksPreview, onGoogleTasksConnect, googleClientId, onGoogleClientIdChange, onSaveGoogleClientId, notionStatus, notionReferences, notionResults, notionQuery, notionSearching, onNotionConnect, onNotionQueryChange, onNotionSearch, onNotionAddReference, onNotionRemoveReference }: { flash: (message: string) => void; obsidianPreview: ObsidianVaultPreview | null; savedObsidianVault: SavedObsidianVault | null; onObsidianFiles: (files: FileList | null) => void; onObsidianDirectoryPick: () => void; onObsidianDisconnect: () => void; googleTasksPreview: GoogleTasksPreview | null; googleTasksConnecting: boolean; onGoogleTasksPreview: () => void; onGoogleTasksConnect: () => void; googleClientId: string; onGoogleClientIdChange: (value: string) => void; onSaveGoogleClientId: () => void; notionStatus: NotionConnectionStatus; notionReferences: NotionReference[]; notionResults: NotionReference[]; notionQuery: string; notionSearching: boolean; onNotionConnect: () => void; onNotionQueryChange: (value: string) => void; onNotionSearch: () => void; onNotionAddReference: (reference: NotionReference) => void; onNotionRemoveReference: (id: string) => void }) {
+function SettingsView({ flash, obsidianPreview, savedObsidianVault, onObsidianFiles, onObsidianDirectoryPick, onObsidianDisconnect, googleTasksPreview, googleTasksConnected, googleTasksConnecting, onGoogleTasksPreview, onGoogleTasksConnect, onGoogleTasksRefresh, googleClientId, onGoogleClientIdChange, onSaveGoogleClientId, notionStatus, notionReferences, notionResults, notionQuery, notionSearching, onNotionConnect, onNotionQueryChange, onNotionSearch, onNotionAddReference, onNotionRemoveReference }: { flash: (message: string) => void; obsidianPreview: ObsidianVaultPreview | null; savedObsidianVault: SavedObsidianVault | null; onObsidianFiles: (files: FileList | null) => void; onObsidianDirectoryPick: () => void; onObsidianDisconnect: () => void; googleTasksPreview: GoogleTasksPreview | null; googleTasksConnected: boolean; googleTasksConnecting: boolean; onGoogleTasksPreview: () => void; onGoogleTasksConnect: () => void; onGoogleTasksRefresh: () => void; googleClientId: string; onGoogleClientIdChange: (value: string) => void; onSaveGoogleClientId: () => void; notionStatus: NotionConnectionStatus; notionReferences: NotionReference[]; notionResults: NotionReference[]; notionQuery: string; notionSearching: boolean; onNotionConnect: () => void; onNotionQueryChange: (value: string) => void; onNotionSearch: () => void; onNotionAddReference: (reference: NotionReference) => void; onNotionRemoveReference: (id: string) => void }) {
   const obsidianInput = useRef<HTMLInputElement>(null);
   useEffect(() => { obsidianInput.current?.setAttribute("webkitdirectory", ""); }, []);
   return (
@@ -572,23 +607,23 @@ function SettingsView({ flash, obsidianPreview, savedObsidianVault, onObsidianFi
           <div className="settings-card-heading">
             <div className="settings-icon"><UsersRound size={19} /></div>
             <div><h2>Google Tasks</h2><p>Commitments source</p></div>
-            <span className={googleTasksConnecting ? "connection-state connecting" : googleTasksPreview ? "connection-state connected" : "connection-state"}>{googleTasksConnecting ? "CONNECTING…" : googleTasksPreview ? "PREVIEW READY" : "NOT CONNECTED"}</span>
+            <span className={googleTasksConnecting ? "connection-state connecting" : googleTasksConnected ? "connection-state connected" : googleTasksPreview ? "connection-state" : "connection-state"}>{googleTasksConnecting ? "LOADING…" : googleTasksConnected ? "CONNECTED" : googleTasksPreview ? "PREVIEW READY" : "NOT CONNECTED"}</span>
           </div>
-          {googleTasksPreview ? (
+          {googleTasksConnected || googleTasksPreview ? (
             <>
-              <div className="google-preview-status"><strong>{googleTasksPreview.accountLabel}</strong><span>{googleTasksPreview.tasks.length} records · {googleTasksPreview.mode === "live" ? "read-only live" : "dry-run only"}</span></div>
-              <div className="google-task-preview">
+              <div className="google-preview-status"><strong>{googleTasksPreview?.accountLabel ?? "Connected Google Tasks account"}</strong><span>{googleTasksPreview ? `${googleTasksPreview.tasks.length} records · ${googleTasksPreview.mode === "live" ? "read-only live" : "dry-run only"}` : "Restoring saved connection…"}</span></div>
+              {googleTasksPreview && <div className="google-task-preview">
                 {googleTasksPreview.tasks.map((task) => <article className="google-task-item" key={task.sourceKey}><div><strong>{task.title}</strong><span>{task.listName}{task.due ? " · due " + task.due : ""}</span></div><span className={task.completed ? "google-task-state done" : "google-task-state"}>{task.completed ? "DONE" : "OPEN"}</span></article>)}
-              </div>
-              <div className="settings-actions"><button className="button outline small" onClick={onGoogleTasksConnect} disabled={googleTasksConnecting}>{googleTasksConnecting ? "Connecting…" : "Connect Google account"}</button><button className="button outline small" onClick={onGoogleTasksPreview} disabled={googleTasksConnecting}>Refresh preview</button><span className="settings-copy compact-copy">Read-only access token stays in memory.</span></div>
+              </div>}
+              <div className="settings-actions"><button className="button outline small" onClick={onGoogleTasksConnect} disabled={googleTasksConnecting}>{googleTasksConnecting ? "Connecting…" : googleTasksConnected ? "Reconnect Google account" : "Connect Google account"}</button><button className="button outline small" onClick={googleTasksConnected ? onGoogleTasksRefresh : onGoogleTasksPreview} disabled={googleTasksConnecting}>{googleTasksConnecting ? "Loading…" : googleTasksConnected ? "Refresh tasks" : "Refresh preview"}</button><span className="settings-copy compact-copy">{googleTasksConnected ? "Google tokens are kept securely by WorkBoard and refreshed when needed." : "Demo data only · no provider writes."}</span></div>
             </>
           ) : (
             <>
               <div className="google-setup-actions"><a href="https://developers.google.com/identity/gsi/web/guides/get-google-api-clientid" target="_blank" rel="noreferrer">Open Google setup guide</a><button className="button outline small" onClick={onGoogleTasksPreview}>Preview demo data</button></div>
               <div className="settings-field"><label>Paste your Google setup code</label><div className="fake-input google-client-input"><input value={googleClientId} onChange={(event) => onGoogleClientIdChange(event.target.value)} placeholder="Paste the client ID from Google" aria-label="Google client ID" /><button className="button outline small" onClick={onSaveGoogleClientId}>Save</button></div></div>
-              <div className="settings-actions"><button className="button dark" onClick={onGoogleTasksConnect} disabled={!googleClientId.trim() || googleTasksConnecting}>{googleTasksConnecting ? "Connecting…" : "Connect Google Tasks"}</button></div>
+              <div className="settings-actions"><button className="button dark" onClick={onGoogleTasksConnect} disabled={googleTasksConnecting}>{googleTasksConnecting ? "Connecting…" : "Connect Google Tasks"}</button></div>
               <div className="settings-field"><label>Selected lists</label><div className="tag-row"><span className="tag">Planning Repository</span><span className="tag">This Week</span><button className="text-button">Edit selection</button></div></div>
-              <p className="settings-copy">This is a one-time Google setup. Workboard saves only the public client ID locally; your Google password and access token never enter this field.</p>
+              <p className="settings-copy">Google authorization is handled securely by WorkBoard. Your Google password and tokens never enter this page.</p>
             </>
           )}
         </section>
