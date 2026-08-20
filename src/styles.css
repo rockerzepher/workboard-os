@@ -312,6 +312,12 @@ button:focus-visible, input:focus-visible, select:focus-visible { outline: 2px s
 .google-task-item strong { overflow: hidden; font-size: 10px; text-overflow: ellipsis; white-space: nowrap; }
 .google-task-state { flex: 0 0 auto; color: var(--red) !important; }
 .google-task-state.done { color: var(--green) !important; }
+.gmail-candidate-list { display: grid; gap: 7px; margin-top: 13px; }
+.gmail-candidate { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 9px 10px; border: 1px solid var(--line); background: var(--white); }
+.gmail-candidate > div { display: grid; gap: 3px; min-width: 0; }
+.gmail-candidate strong { overflow: hidden; font-size: 10px; text-overflow: ellipsis; white-space: nowrap; }
+.gmail-candidate span { overflow: hidden; color: var(--muted); font: 9px 'DM Mono', monospace; text-overflow: ellipsis; white-space: nowrap; }
+.gmail-candidate a { flex: 0 0 auto; color: var(--red); font: 9px 'DM Mono', monospace; text-decoration: none; }
 .notion-reference-list { display: grid; gap: 7px; margin-top: 12px; }
 .notion-reference-item { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 9px 10px; border: 1px solid var(--line); background: var(--white); }
 .notion-reference-item > div { display: grid; gap: 3px; min-width: 0; }

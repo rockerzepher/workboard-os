@@ -33,6 +33,7 @@ import {
 } from "lucide-react";
 import { loadObsidianVaultHandle, readObsidianDirectory, readObsidianVault, removeObsidianVaultHandle, saveObsidianVaultHandle, type ObsidianDirectoryHandle, type ObsidianVaultPreview } from "./providers/obsidian";
 import { getGoogleStatus, readConnectedGoogleTasks, startGoogleOAuth, syntheticGoogleTasksAdapter, type GoogleTaskRecord, type GoogleTasksPreview } from "./providers/googleTasks";
+import { getGmailStatus, scanGmail, startGmailOAuth, type GmailCandidate, type GmailScan } from "./providers/gmail";
 import { getNotionStatus, searchNotion, startNotionOAuth, type NotionConnectionStatus, type NotionReference } from "./providers/notion";
 import { inspectWorkboard, type AttentionSignal, type AttentionStatus } from "./domain/attention";
 
@@ -230,6 +231,9 @@ function App() {
   const [googleTasksConnecting, setGoogleTasksConnecting] = useState(false);
   const [googleTasksConnected, setGoogleTasksConnected] = useState(false);
   const [googleClientId, setGoogleClientId] = useState(readGoogleClientId);
+  const [gmailScan, setGmailScan] = useState<GmailScan | null>(null);
+  const [gmailConnecting, setGmailConnecting] = useState(false);
+  const [gmailConnected, setGmailConnected] = useState(false);
   const [notionStatus, setNotionStatus] = useState<NotionConnectionStatus>({ connected: false, configured: false });
   const [notionReferences, setNotionReferences] = useState<NotionReference[]>(readNotionReferences);
   const [notionResults, setNotionResults] = useState<NotionReference[]>([]);
@@ -290,6 +294,27 @@ function App() {
   }, []);
 
   useEffect(() => {
+    let active = true;
+    async function restoreGmail() {
+      try {
+        const status = await getGmailStatus();
+        if (!active) return;
+        setGmailConnected(status.connected);
+        if (status.connected) await runGmailScan(false);
+      } catch {
+        if (active) setGmailConnected(false);
+      }
+    }
+    const params = new URLSearchParams(window.location.search);
+    if (params.get("gmail") === "connected") {
+      window.history.replaceState({}, "", window.location.pathname);
+      flash("Gmail connected · scanning communications");
+    }
+    void restoreGmail();
+    return () => { active = false; };
+  }, []);
+
+  useEffect(() => {
     localStorage.setItem(NOTION_REFERENCES_STORAGE_KEY, JSON.stringify(notionReferences));
   }, [notionReferences]);
 
@@ -309,7 +334,8 @@ function App() {
 
   const counts = useMemo(() => Object.fromEntries(verticals.map((vertical) => [vertical.id, tasks.filter((task) => task.container === vertical.id).length])), [tasks]);
   const demoTaskCount = useMemo(() => tasks.filter((task) => DEMO_TASK_IDS.has(task.id)).length, [tasks]);
-  const attentionSignals = useMemo(() => inspectWorkboard(tasks), [tasks]);
+  const gmailAttentionSignals = useMemo(() => (gmailScan?.candidates ?? []).map((candidate) => gmailCandidateToSignal(candidate)), [gmailScan]);
+  const attentionSignals = useMemo(() => [...inspectWorkboard(tasks), ...gmailAttentionSignals], [tasks, gmailAttentionSignals]);
   const openAttentionCount = attentionSignals.filter((signal) => !["attended", "dismissed"].includes(attentionStatuses[signal.id] ?? "open")).length;
   const completedToday = tasks.filter((task) => task.container === "today" && task.completed).length;
   const quickClear = tasks.filter((task) => task.container === "today" && task.role === "quick_clear");
@@ -336,6 +362,42 @@ function App() {
     if (!window.confirm("Remove WorkBoard starter cards? Your Google Tasks will not be changed.")) return;
     setTasks((current) => current.filter((task) => !DEMO_TASK_IDS.has(task.id)));
     flash("Starter cards removed locally · Google Tasks unchanged");
+  }
+
+  function gmailCandidateToSignal(candidate: GmailCandidate): AttentionSignal {
+    const snippet = candidate.snippet ? ` ${candidate.snippet.slice(0, 180)}` : "";
+    return {
+      id: `gmail-${candidate.id}`,
+      category: "communication",
+      severity: candidate.kind === "sent_follow_up" ? "high" : "medium",
+      title: candidate.kind === "sent_follow_up" ? `Follow up: ${candidate.subject}` : `Incoming email: ${candidate.subject}`,
+      detail: `${candidate.reason} ${candidate.suggestedAction}${snippet}`,
+      taskIds: [],
+      targetView: candidate.kind === "sent_follow_up" ? "today" : "planning_repository",
+      actionLabel: "Open email",
+      sourceUrl: candidate.sourceUrl,
+    };
+  }
+
+  async function runGmailScan(showNotice = true) {
+    setGmailConnecting(true);
+    try {
+      const result = await scanGmail();
+      setGmailConnected(true);
+      setGmailScan(result);
+      if (showNotice) flash(`Communications Scout scanned ${result.candidates.length} candidate emails`);
+    } catch (error) {
+      setGmailConnected(false);
+      flash(error instanceof Error ? error.message : "Gmail scan failed");
+    } finally {
+      setGmailConnecting(false);
+    }
+  }
+
+  function connectGmail() {
+    if (gmailConnecting) return;
+    setGmailConnecting(true);
+    startGmailOAuth();
   }
 
   function setAttentionStatus(signal: AttentionSignal, status: AttentionStatus) {
@@ -512,7 +574,7 @@ function App() {
         {view === "projects" && <ProjectsView tasks={tasks} selectedProject={selectedProject} setSelectedProject={setSelectedProject} onToggle={toggleTask} />}
         {view === "attention" && <AttentionQueueView signals={attentionSignals} statuses={attentionStatuses} navigate={navigate} onStatus={setAttentionStatus} />}
         {view === "review" && <ReviewView tasks={tasks} navigate={navigate} onMove={moveTask} />}
-        {view === "settings" && <SettingsView flash={flash} obsidianPreview={obsidianPreview} savedObsidianVault={savedObsidianVault} onObsidianFiles={connectObsidian} onObsidianDirectoryPick={connectObsidianDirectory} onObsidianDisconnect={async () => { setObsidianPreview(null); localStorage.removeItem(OBSIDIAN_VAULT_STORAGE_KEY); setSavedObsidianVault(null); await removeObsidianVaultHandle().catch(() => undefined); flash("Obsidian disconnected · vault unchanged"); }} googleTasksPreview={googleTasksPreview} googleTasksConnected={googleTasksConnected} googleTasksConnecting={googleTasksConnecting} demoTaskCount={demoTaskCount} onClearDemoTasks={clearDemoTasks} onGoogleTasksPreview={previewGoogleTasks} onGoogleTasksConnect={connectGoogleTasks} onGoogleTasksRefresh={() => refreshGoogleTasks()} googleClientId={googleClientId} onGoogleClientIdChange={setGoogleClientId} onSaveGoogleClientId={saveGoogleClientId} notionStatus={notionStatus} notionReferences={notionReferences} notionResults={notionResults} notionQuery={notionQuery} notionSearching={notionSearching} onNotionConnect={connectNotion} onNotionQueryChange={setNotionQuery} onNotionSearch={findNotionReferences} onNotionAddReference={addNotionReference} onNotionRemoveReference={removeNotionReference} />}
+        {view === "settings" && <SettingsView flash={flash} obsidianPreview={obsidianPreview} savedObsidianVault={savedObsidianVault} onObsidianFiles={connectObsidian} onObsidianDirectoryPick={connectObsidianDirectory} onObsidianDisconnect={async () => { setObsidianPreview(null); localStorage.removeItem(OBSIDIAN_VAULT_STORAGE_KEY); setSavedObsidianVault(null); await removeObsidianVaultHandle().catch(() => undefined); flash("Obsidian disconnected · vault unchanged"); }} googleTasksPreview={googleTasksPreview} googleTasksConnected={googleTasksConnected} googleTasksConnecting={googleTasksConnecting} demoTaskCount={demoTaskCount} onClearDemoTasks={clearDemoTasks} onGoogleTasksPreview={previewGoogleTasks} onGoogleTasksConnect={connectGoogleTasks} onGoogleTasksRefresh={() => refreshGoogleTasks()} gmailScan={gmailScan} gmailConnected={gmailConnected} gmailConnecting={gmailConnecting} onGmailConnect={connectGmail} onGmailScan={() => runGmailScan()} googleClientId={googleClientId} onGoogleClientIdChange={setGoogleClientId} onSaveGoogleClientId={saveGoogleClientId} notionStatus={notionStatus} notionReferences={notionReferences} notionResults={notionResults} notionQuery={notionQuery} notionSearching={notionSearching} onNotionConnect={connectNotion} onNotionQueryChange={setNotionQuery} onNotionSearch={findNotionReferences} onNotionAddReference={addNotionReference} onNotionRemoveReference={removeNotionReference} />}
       </main>
       {notice && <div className="toast"><Check size={15} /> {notice}</div>}
     </div>
@@ -623,7 +685,7 @@ function AttentionQueueView({ signals, statuses, navigate, onStatus }: { signals
   const openSignals = signals.filter((signal) => !["attended", "dismissed"].includes(statuses[signal.id] ?? "open"));
   return <div className="content-wrap attention-page"><PageHeader eyebrow="CHIEF OF STAFF / ATTENTION QUEUE" title="Bring the important things forward." description="A local WorkBoard Sentinel reviews focus, overdue work, backlog, and dependencies. Nothing is changed automatically." actions={<button className="button dark" onClick={() => window.location.reload()}><RefreshCw size={15} /> Run review</button>} />
     <section className="attention-banner"><div className="attention-score"><span>{openSignals.length}</span><small>open signals</small></div><div><strong>Chief of Staff review queue</strong><p>Review each signal, then mark it attended, defer it, or dismiss it locally.</p></div></section>
-    {openSignals.length ? <div className="attention-list">{openSignals.map((signal) => { const status = statuses[signal.id] ?? "open"; return <article className={`attention-card ${signal.severity}`} key={signal.id}><div className="attention-card-top"><span className="eyebrow">{signal.category} · {signal.severity}</span><span className="attention-status">{status}</span></div><h2>{signal.title}</h2><p>{signal.detail}</p><div className="attention-card-foot"><button className="button outline small" onClick={() => navigate(signal.targetView)}>{signal.actionLabel} <ArrowRight size={13} /></button><div className="attention-actions"><button className="text-button" onClick={() => onStatus(signal, "attended")}>Mark attended</button><button className="text-button" onClick={() => onStatus(signal, "deferred")}>Defer</button><button className="text-button" onClick={() => onStatus(signal, "dismissed")}>Dismiss</button></div></div></article>; })}</div> : <div className="empty-state"><Sparkles size={23} /><strong>No open signals.</strong><span>The WorkBoard Sentinel has nothing new to bring forward.</span></div>}
+    {openSignals.length ? <div className="attention-list">{openSignals.map((signal) => { const status = statuses[signal.id] ?? "open"; return <article className={`attention-card ${signal.severity}`} key={signal.id}><div className="attention-card-top"><span className="eyebrow">{signal.category} · {signal.severity}</span><span className="attention-status">{status}</span></div><h2>{signal.title}</h2><p>{signal.detail}</p><div className="attention-card-foot">{signal.sourceUrl ? <a className="button outline small" href={signal.sourceUrl} target="_blank" rel="noreferrer">{signal.actionLabel} <ExternalLink size={13} /></a> : <button className="button outline small" onClick={() => navigate(signal.targetView)}>{signal.actionLabel} <ArrowRight size={13} /></button>}<div className="attention-actions"><button className="text-button" onClick={() => onStatus(signal, "attended")}>Mark attended</button><button className="text-button" onClick={() => onStatus(signal, "deferred")}>Defer</button><button className="text-button" onClick={() => onStatus(signal, "dismissed")}>Dismiss</button></div></div></article>; })}</div> : <div className="empty-state"><Sparkles size={23} /><strong>No open signals.</strong><span>The WorkBoard Sentinel has nothing new to bring forward.</span></div>}
   </div>;
 }
 
@@ -639,7 +701,7 @@ function ReviewView({ tasks, navigate, onMove }: { tasks: Task[]; navigate: (vie
   return <div className="content-wrap review-page"><PageHeader eyebrow="WORK OS / WEEKLY REVIEW" title="Review the system." description="Evidence over guilt. Make small, reversible decisions that keep the board trustworthy." actions={<button className="button dark"><RefreshCw size={15} /> Sync preview</button>} /><section className="review-banner"><div className="review-score"><span className="score-number">7</span><span>open review<br />signals</span></div><div><strong>Last reviewed 4 days ago</strong><p>Nothing will be completed, deleted, or moved in bulk from this screen.</p></div></section><div className="review-grid">{queues.map((queue) => <button className="review-card" key={queue.label} onClick={() => navigate(queue.action)}><div className="review-card-top"><span className="eyebrow">QUEUE</span><span className={`queue-count ${queue.count ? "has-items" : ""}`}>{queue.count}</span></div><h2>{queue.label}</h2><p>{queue.detail}</p><span className="review-action">Open queue <ArrowRight size={14} /></span></button>)}</div><section className="review-guardrail"><CircleHelp size={16} /><span>Review actions are local metadata changes until you explicitly choose a provider write-back.</span></section></div>;
 }
 
-function SettingsView({ flash, obsidianPreview, savedObsidianVault, onObsidianFiles, onObsidianDirectoryPick, onObsidianDisconnect, googleTasksPreview, googleTasksConnected, googleTasksConnecting, demoTaskCount, onClearDemoTasks, onGoogleTasksPreview, onGoogleTasksConnect, onGoogleTasksRefresh, googleClientId, onGoogleClientIdChange, onSaveGoogleClientId, notionStatus, notionReferences, notionResults, notionQuery, notionSearching, onNotionConnect, onNotionQueryChange, onNotionSearch, onNotionAddReference, onNotionRemoveReference }: { flash: (message: string) => void; obsidianPreview: ObsidianVaultPreview | null; savedObsidianVault: SavedObsidianVault | null; onObsidianFiles: (files: FileList | null) => void; onObsidianDirectoryPick: () => void; onObsidianDisconnect: () => void; googleTasksPreview: GoogleTasksPreview | null; googleTasksConnected: boolean; googleTasksConnecting: boolean; demoTaskCount: number; onClearDemoTasks: () => void; onGoogleTasksPreview: () => void; onGoogleTasksConnect: () => void; onGoogleTasksRefresh: () => void; googleClientId: string; onGoogleClientIdChange: (value: string) => void; onSaveGoogleClientId: () => void; notionStatus: NotionConnectionStatus; notionReferences: NotionReference[]; notionResults: NotionReference[]; notionQuery: string; notionSearching: boolean; onNotionConnect: () => void; onNotionQueryChange: (value: string) => void; onNotionSearch: () => void; onNotionAddReference: (reference: NotionReference) => void; onNotionRemoveReference: (id: string) => void }) {
+function SettingsView({ flash, obsidianPreview, savedObsidianVault, onObsidianFiles, onObsidianDirectoryPick, onObsidianDisconnect, googleTasksPreview, googleTasksConnected, googleTasksConnecting, demoTaskCount, onClearDemoTasks, onGoogleTasksPreview, onGoogleTasksConnect, onGoogleTasksRefresh, gmailScan, gmailConnected, gmailConnecting, onGmailConnect, onGmailScan, googleClientId, onGoogleClientIdChange, onSaveGoogleClientId, notionStatus, notionReferences, notionResults, notionQuery, notionSearching, onNotionConnect, onNotionQueryChange, onNotionSearch, onNotionAddReference, onNotionRemoveReference }: { flash: (message: string) => void; obsidianPreview: ObsidianVaultPreview | null; savedObsidianVault: SavedObsidianVault | null; onObsidianFiles: (files: FileList | null) => void; onObsidianDirectoryPick: () => void; onObsidianDisconnect: () => void; googleTasksPreview: GoogleTasksPreview | null; googleTasksConnected: boolean; googleTasksConnecting: boolean; demoTaskCount: number; onClearDemoTasks: () => void; onGoogleTasksPreview: () => void; onGoogleTasksConnect: () => void; onGoogleTasksRefresh: () => void; gmailScan: GmailScan | null; gmailConnected: boolean; gmailConnecting: boolean; onGmailConnect: () => void; onGmailScan: () => void; googleClientId: string; onGoogleClientIdChange: (value: string) => void; onSaveGoogleClientId: () => void; notionStatus: NotionConnectionStatus; notionReferences: NotionReference[]; notionResults: NotionReference[]; notionQuery: string; notionSearching: boolean; onNotionConnect: () => void; onNotionQueryChange: (value: string) => void; onNotionSearch: () => void; onNotionAddReference: (reference: NotionReference) => void; onNotionRemoveReference: (id: string) => void }) {
   const obsidianInput = useRef<HTMLInputElement>(null);
   useEffect(() => { obsidianInput.current?.setAttribute("webkitdirectory", ""); }, []);
   return (
@@ -670,6 +732,18 @@ function SettingsView({ flash, obsidianPreview, savedObsidianVault, onObsidianFi
               <p className="settings-copy">Google authorization is handled securely by WorkBoard. Your Google password and tokens never enter this page.</p>
             </>
           )}
+        </section>
+        <section className="settings-card">
+          <div className="settings-card-heading"><div className="settings-icon"><Bell size={19} /></div><div><h2>Communications Scout</h2><p>Read-only Gmail intelligence</p></div><span className={`connection-state ${gmailConnected ? "connected" : ""}`}>{gmailConnecting ? "SCANNING…" : gmailConnected ? "CONNECTED" : "NOT CONNECTED"}</span></div>
+          {gmailConnected ? <>
+            <div className="google-preview-status"><strong>{gmailScan?.accountLabel ?? "Connected Gmail account"}</strong><span>{gmailScan ? `${gmailScan.candidates.length} candidate emails · last 7 days` : "Restoring saved connection…"}</span></div>
+            {gmailScan && <div className="gmail-candidate-list">{gmailScan.candidates.slice(0, 5).map((candidate) => <article className="gmail-candidate" key={candidate.id}><div><strong>{candidate.kind === "sent_follow_up" ? "FOLLOW UP" : "INCOMING"} · {candidate.subject}</strong><span>{candidate.sender} · {candidate.date}</span></div><a href={candidate.sourceUrl} target="_blank" rel="noreferrer">OPEN</a></article>)}</div>}
+            <div className="settings-actions"><button className="button outline small" onClick={onGmailConnect} disabled={gmailConnecting}>Reconnect Gmail</button><button className="button outline small" onClick={onGmailScan} disabled={gmailConnecting}>{gmailConnecting ? "Scanning…" : "Scan again"}</button></div>
+            <p className="settings-copy">The Communications Scout reads message metadata and snippets only. It never sends, deletes, archives, or changes email.</p>
+          </> : <>
+            <p className="settings-copy">Find sent messages from the past seven days that may need follow-up, plus important incoming mail while filtering obvious marketing and bulk traffic.</p>
+            <div className="settings-actions"><button className="button dark" onClick={onGmailConnect} disabled={gmailConnecting}>{gmailConnecting ? "Connecting…" : "Connect Gmail read-only"}</button></div>
+          </>}
         </section>
         <section className="settings-card">
           <div className="settings-card-heading">

@@ -15,13 +15,14 @@ export type AttentionView = "planning_repository" | "today" | "this_week" | "pro
 
 export type AttentionSignal = {
   id: string;
-  category: "focus" | "overdue" | "backlog" | "dependency";
+  category: "focus" | "overdue" | "backlog" | "dependency" | "communication";
   severity: AttentionSeverity;
   title: string;
   detail: string;
   taskIds: string[];
   targetView: AttentionView;
   actionLabel: string;
+  sourceUrl?: string;
 };
 
 function isPastDate(value: string | undefined, today: string) {
