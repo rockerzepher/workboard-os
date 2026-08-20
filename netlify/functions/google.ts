@@ -9,7 +9,7 @@ type GoogleSession = {
 };
 
 type GoogleTaskList = { id: string; title: string };
-type GoogleTask = { id: string; title?: string; due?: string; status?: string; notes?: string };
+type GoogleTask = { id: string; title?: string; parent?: string; due?: string; status?: string; notes?: string };
 
 const sessions = getStore({ name: "workboard-google-sessions", consistency: "strong" });
 const SESSION_COOKIE = "workboard-google-session";
@@ -91,7 +91,7 @@ async function fetchAll<T>(url: string, accessToken: string) {
 
 async function readTasks(accessToken: string) {
   const lists = await fetchAll<GoogleTaskList>("https://tasks.googleapis.com/tasks/v1/users/@me/lists", accessToken);
-  const tasks = [] as Array<{ sourceId: string; sourceKey: string; title: string; listName: string; due?: string; completed: boolean; notes?: string }>;
+  const tasks = [] as Array<{ sourceId: string; sourceKey: string; title: string; listName: string; parentSourceId?: string; due?: string; completed: boolean; notes?: string }>;
   for (const list of lists) {
     const records = await fetchAll<GoogleTask>(`https://tasks.googleapis.com/tasks/v1/lists/${encodeURIComponent(list.id)}/tasks?showCompleted=true&showHidden=false`, accessToken);
     tasks.push(...records.map((task) => ({
@@ -99,6 +99,7 @@ async function readTasks(accessToken: string) {
       sourceKey: `google_tasks:${task.id}`,
       title: task.title ?? "Untitled Google Task",
       listName: list.title,
+      parentSourceId: task.parent,
       due: task.due?.slice(0, 10),
       completed: task.status === "completed",
       notes: task.notes,

@@ -3,6 +3,7 @@ export type GoogleTaskRecord = {
   sourceKey: string;
   title: string;
   listName: string;
+  parentSourceId?: string;
   due?: string;
   completed: boolean;
   notes?: string;
