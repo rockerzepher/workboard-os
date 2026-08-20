@@ -34,9 +34,10 @@ import {
 import { loadObsidianVaultHandle, readObsidianDirectory, readObsidianVault, removeObsidianVaultHandle, saveObsidianVaultHandle, type ObsidianDirectoryHandle, type ObsidianVaultPreview } from "./providers/obsidian";
 import { getGoogleStatus, readConnectedGoogleTasks, startGoogleOAuth, syntheticGoogleTasksAdapter, type GoogleTaskRecord, type GoogleTasksPreview } from "./providers/googleTasks";
 import { getNotionStatus, searchNotion, startNotionOAuth, type NotionConnectionStatus, type NotionReference } from "./providers/notion";
+import { inspectWorkboard, type AttentionSignal, type AttentionStatus } from "./domain/attention";
 
-type View = "board" | "planning_repository" | "today" | "this_week" | "projects" | "app_ideas" | "waiting_for" | "review" | "settings";
-type Container = Exclude<View, "board" | "review" | "settings" | "projects"> | "projects";
+type View = "board" | "planning_repository" | "today" | "this_week" | "projects" | "app_ideas" | "waiting_for" | "attention" | "review" | "settings";
+type Container = Exclude<View, "board" | "review" | "settings" | "attention" | "projects"> | "projects";
 type Role = "quick_clear" | "main_outcome" | "evening_build" | null;
 
 type Task = {
@@ -69,6 +70,7 @@ type Project = {
 const GOOGLE_CLIENT_ID_STORAGE_KEY = "workboard-google-client-id";
 const OBSIDIAN_VAULT_STORAGE_KEY = "workboard-obsidian-vault";
 const NOTION_REFERENCES_STORAGE_KEY = "workboard-notion-references";
+const ATTENTION_STATUS_STORAGE_KEY = "workboard-attention-status";
 
 function readGoogleClientId() {
   try {
@@ -114,6 +116,16 @@ function readNotionReferences(): NotionReference[] {
     return Array.isArray(parsed) ? parsed : [];
   } catch {
     return [];
+  }
+}
+
+function readAttentionStatuses(): Record<string, AttentionStatus> {
+  try {
+    const saved = localStorage.getItem(ATTENTION_STATUS_STORAGE_KEY);
+    const parsed = saved ? JSON.parse(saved) as Record<string, AttentionStatus> : {};
+    return parsed && typeof parsed === "object" ? parsed : {};
+  } catch {
+    return {};
   }
 }
 
@@ -223,6 +235,7 @@ function App() {
   const [notionResults, setNotionResults] = useState<NotionReference[]>([]);
   const [notionQuery, setNotionQuery] = useState("");
   const [notionSearching, setNotionSearching] = useState(false);
+  const [attentionStatuses, setAttentionStatuses] = useState<Record<string, AttentionStatus>>(readAttentionStatuses);
 
   useEffect(() => {
     let active = true;
@@ -284,6 +297,10 @@ function App() {
     localStorage.setItem("workboard-tasks", JSON.stringify(tasks));
   }, [tasks]);
 
+  useEffect(() => {
+    localStorage.setItem(ATTENTION_STATUS_STORAGE_KEY, JSON.stringify(attentionStatuses));
+  }, [attentionStatuses]);
+
   const filteredTasks = useMemo(() => tasks.filter((task) => {
     const matchesQuery = `${task.title} ${task.area} ${task.project ?? ""}`.toLowerCase().includes(query.toLowerCase());
     const matchesArea = areaFilter === "All areas" || task.area === areaFilter;
@@ -292,6 +309,8 @@ function App() {
 
   const counts = useMemo(() => Object.fromEntries(verticals.map((vertical) => [vertical.id, tasks.filter((task) => task.container === vertical.id).length])), [tasks]);
   const demoTaskCount = useMemo(() => tasks.filter((task) => DEMO_TASK_IDS.has(task.id)).length, [tasks]);
+  const attentionSignals = useMemo(() => inspectWorkboard(tasks), [tasks]);
+  const openAttentionCount = attentionSignals.filter((signal) => !["attended", "dismissed"].includes(attentionStatuses[signal.id] ?? "open")).length;
   const completedToday = tasks.filter((task) => task.container === "today" && task.completed).length;
   const quickClear = tasks.filter((task) => task.container === "today" && task.role === "quick_clear");
   const mainOutcome = tasks.find((task) => task.container === "today" && task.role === "main_outcome");
@@ -317,6 +336,11 @@ function App() {
     if (!window.confirm("Remove WorkBoard starter cards? Your Google Tasks will not be changed.")) return;
     setTasks((current) => current.filter((task) => !DEMO_TASK_IDS.has(task.id)));
     flash("Starter cards removed locally · Google Tasks unchanged");
+  }
+
+  function setAttentionStatus(signal: AttentionSignal, status: AttentionStatus) {
+    setAttentionStatuses((current) => ({ ...current, [signal.id]: status }));
+    flash(status === "attended" ? "Marked attended locally" : status === "deferred" ? "Deferred for later review" : "Dismissed locally");
   }
 
   async function refreshGoogleTasks(showNotice = true) {
@@ -476,7 +500,7 @@ function App() {
   return (
     <div className={`app-shell ${view === "board" ? "board-mode" : view === "today" ? "today-mode" : ""}`}>
       <button className="mobile-menu" onClick={() => setMobileNav(true)} aria-label="Open navigation"><Menu size={20} /></button>
-      <Sidebar view={view} navigate={navigate} mobileNav={mobileNav} close={() => setMobileNav(false)} counts={counts} />
+      <Sidebar view={view} navigate={navigate} mobileNav={mobileNav} close={() => setMobileNav(false)} counts={counts} attentionCount={openAttentionCount} />
       <main className="main-canvas">
         <div className="mobile-header"><span className="brand-mark">W</span><span>Work OS</span><span className="mobile-header-spacer" /><button className="icon-button" onClick={() => setMobileNav(true)} aria-label="Open navigation"><PanelLeft size={18} /></button></div>
         {view === "board" && <BoardOverview tasks={tasks} counts={counts} liveGoogleTasks={googleTasksConnected} navigate={navigate} onToggle={toggleTask} onReorder={reorderTask} />}
@@ -486,6 +510,7 @@ function App() {
         {view === "app_ideas" && <VerticalView view="app_ideas" tasks={filteredTasks.filter((task) => task.container === "app_ideas")} query={query} setQuery={setQuery} capture={capture} setCapture={setCapture} addCapture={addCapture} areaFilter={areaFilter} setAreaFilter={setAreaFilter} onToggle={toggleTask} onMove={moveTask} onRole={setRole} onReorder={reorderTask} onExpand={setExpandedTask} expandedTask={expandedTask} />}
         {view === "waiting_for" && <VerticalView view="waiting_for" tasks={filteredTasks.filter((task) => task.container === "waiting_for")} query={query} setQuery={setQuery} capture={capture} setCapture={setCapture} addCapture={addCapture} areaFilter={areaFilter} setAreaFilter={setAreaFilter} onToggle={toggleTask} onMove={moveTask} onRole={setRole} onReorder={reorderTask} onExpand={setExpandedTask} expandedTask={expandedTask} />}
         {view === "projects" && <ProjectsView tasks={tasks} selectedProject={selectedProject} setSelectedProject={setSelectedProject} onToggle={toggleTask} />}
+        {view === "attention" && <AttentionQueueView signals={attentionSignals} statuses={attentionStatuses} navigate={navigate} onStatus={setAttentionStatus} />}
         {view === "review" && <ReviewView tasks={tasks} navigate={navigate} onMove={moveTask} />}
         {view === "settings" && <SettingsView flash={flash} obsidianPreview={obsidianPreview} savedObsidianVault={savedObsidianVault} onObsidianFiles={connectObsidian} onObsidianDirectoryPick={connectObsidianDirectory} onObsidianDisconnect={async () => { setObsidianPreview(null); localStorage.removeItem(OBSIDIAN_VAULT_STORAGE_KEY); setSavedObsidianVault(null); await removeObsidianVaultHandle().catch(() => undefined); flash("Obsidian disconnected · vault unchanged"); }} googleTasksPreview={googleTasksPreview} googleTasksConnected={googleTasksConnected} googleTasksConnecting={googleTasksConnecting} demoTaskCount={demoTaskCount} onClearDemoTasks={clearDemoTasks} onGoogleTasksPreview={previewGoogleTasks} onGoogleTasksConnect={connectGoogleTasks} onGoogleTasksRefresh={() => refreshGoogleTasks()} googleClientId={googleClientId} onGoogleClientIdChange={setGoogleClientId} onSaveGoogleClientId={saveGoogleClientId} notionStatus={notionStatus} notionReferences={notionReferences} notionResults={notionResults} notionQuery={notionQuery} notionSearching={notionSearching} onNotionConnect={connectNotion} onNotionQueryChange={setNotionQuery} onNotionSearch={findNotionReferences} onNotionAddReference={addNotionReference} onNotionRemoveReference={removeNotionReference} />}
       </main>
@@ -494,7 +519,7 @@ function App() {
   );
 }
 
-function Sidebar({ view, navigate, mobileNav, close, counts }: { view: View; navigate: (view: View) => void; mobileNav: boolean; close: () => void; counts: Record<string, number> }) {
+function Sidebar({ view, navigate, mobileNav, close, counts, attentionCount }: { view: View; navigate: (view: View) => void; mobileNav: boolean; close: () => void; counts: Record<string, number>; attentionCount: number }) {
   return <>
     {mobileNav && <button className="mobile-scrim" onClick={close} aria-label="Close navigation" />}
     <aside className={`sidebar ${mobileNav ? "sidebar-open" : ""}`}>
@@ -512,6 +537,7 @@ function Sidebar({ view, navigate, mobileNav, close, counts }: { view: View; nav
         <button className="context-item"><BookOpen size={16} /> Heritage Malawi / HM</button>
         <button className="context-item"><UserRound size={16} /> Personal / Admin</button>
         <div className="footer-divider" />
+        <button className={`context-item ${view === "attention" ? "context-active" : ""}`} onClick={() => navigate("attention")}><Sparkles size={16} /> Attention Queue {attentionCount > 0 && <span className="review-dot">{attentionCount}</span>}</button>
         <button className={`context-item ${view === "review" ? "context-active" : ""}`} onClick={() => navigate("review")}><Bell size={16} /> Weekly Review <span className="review-dot">7</span></button>
         <button className={`context-item ${view === "settings" ? "context-active" : ""}`} onClick={() => navigate("settings")}><SettingsIcon size={16} /> Settings</button>
       </div>
@@ -590,6 +616,14 @@ function ProjectsView({ tasks, selectedProject, setSelectedProject, onToggle }: 
   return <div className="content-wrap projects-page"><PageHeader eyebrow="WORK BOARD / PROJECTS" title="Active projects" description="Outcomes with more than one action. Every active project needs a next action." actions={<button className="button primary"><Plus size={16} /> New project</button>} />
     <div className="project-layout"><div className="project-list">{projects.map((item) => { const count = tasks.filter((task) => task.project === item.name).length; return <button key={item.id} className={`project-card ${item.id === selectedProject ? "selected" : ""}`} onClick={() => setSelectedProject(item.id)}><div className="project-card-top"><span className={`status-dot ${item.status.replace(" ", "-")}`} /> <span className="status-label">{item.status}</span><span className="project-code">{item.id.toUpperCase()}</span></div><h2>{item.name}</h2><p>{item.outcome}</p><div className="project-card-foot"><span><Check size={14} /> {tasks.filter((task) => task.project === item.name && task.completed).length}/{count} tasks</span><span>{item.area}</span></div></button>; })}</div>
       <section className="project-detail"><div className="detail-header"><div><span className="eyebrow">{project.id.toUpperCase()} / {project.status.toUpperCase()}</span><h2>{project.name}</h2></div><button className="icon-button"><ExternalLink size={17} /></button></div><div className="project-outcome"><span className="eyebrow">OUTCOME / OBJECTIVE</span><p>{project.outcome}</p></div><div className="project-detail-grid"><div><div className="section-heading compact"><h3>Next actions</h3><span className="mono muted">{projectTasks.filter((task) => !task.completed).length} active</span></div>{projectTasks.length ? <div className="project-task-list">{projectTasks.map((task) => <div className={`project-task ${task.completed ? "done" : ""}`} key={task.id}><button className={`check-box ${task.completed ? "checked" : ""}`} onClick={() => onToggle(task.id)}>{task.completed && <Check size={14} />}</button><span>{task.title}</span></div>)}</div> : <div className="empty-state small">No linked tasks yet.</div>}</div><aside className="linked-context"><div className="eyebrow"><BookOpen size={14} /> LINKED CONTEXT</div><div className="context-card"><BookOpen size={15} /><span>{project.note}</span><ExternalLink size={14} /></div><p className="muted small-copy">Obsidian notes stay read-only and are opened at the source.</p></aside></div></section></div>
+  </div>;
+}
+
+function AttentionQueueView({ signals, statuses, navigate, onStatus }: { signals: AttentionSignal[]; statuses: Record<string, AttentionStatus>; navigate: (view: View) => void; onStatus: (signal: AttentionSignal, status: AttentionStatus) => void }) {
+  const openSignals = signals.filter((signal) => !["attended", "dismissed"].includes(statuses[signal.id] ?? "open"));
+  return <div className="content-wrap attention-page"><PageHeader eyebrow="CHIEF OF STAFF / ATTENTION QUEUE" title="Bring the important things forward." description="A local WorkBoard Sentinel reviews focus, overdue work, backlog, and dependencies. Nothing is changed automatically." actions={<button className="button dark" onClick={() => window.location.reload()}><RefreshCw size={15} /> Run review</button>} />
+    <section className="attention-banner"><div className="attention-score"><span>{openSignals.length}</span><small>open signals</small></div><div><strong>Chief of Staff review queue</strong><p>Review each signal, then mark it attended, defer it, or dismiss it locally.</p></div></section>
+    {openSignals.length ? <div className="attention-list">{openSignals.map((signal) => { const status = statuses[signal.id] ?? "open"; return <article className={`attention-card ${signal.severity}`} key={signal.id}><div className="attention-card-top"><span className="eyebrow">{signal.category} · {signal.severity}</span><span className="attention-status">{status}</span></div><h2>{signal.title}</h2><p>{signal.detail}</p><div className="attention-card-foot"><button className="button outline small" onClick={() => navigate(signal.targetView)}>{signal.actionLabel} <ArrowRight size={13} /></button><div className="attention-actions"><button className="text-button" onClick={() => onStatus(signal, "attended")}>Mark attended</button><button className="text-button" onClick={() => onStatus(signal, "deferred")}>Defer</button><button className="text-button" onClick={() => onStatus(signal, "dismissed")}>Dismiss</button></div></div></article>; })}</div> : <div className="empty-state"><Sparkles size={23} /><strong>No open signals.</strong><span>The WorkBoard Sentinel has nothing new to bring forward.</span></div>}
   </div>;
 }
 
