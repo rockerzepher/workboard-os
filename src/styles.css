@@ -150,6 +150,8 @@ button:focus-visible, input:focus-visible, select:focus-visible { outline: 2px s
 .today-reference-heading span { padding: 6px 9px; border: 1px solid var(--ink); color: var(--ink); font: 10px 'DM Mono', monospace; text-transform: uppercase; letter-spacing: .06em; white-space: nowrap; }
 .runway-panel { border: 1px solid var(--ink); }
 .runway-row { display: flex; align-items: center; gap: 12px; min-height: 44px; padding: 8px 12px; border-bottom: 1px solid var(--ink); }
+.runway-row[draggable] { cursor: grab; }
+.runway-row[draggable]:active { cursor: grabbing; }
 .runway-row:last-child { border-bottom: 0; }
 .reference-check { display: grid; place-items: center; flex: 0 0 auto; width: 17px; height: 17px; border: 2px solid var(--ink); padding: 0; background: #fff; color: #fff; }
 .reference-check.checked { background: var(--ink); }
@@ -163,6 +165,17 @@ button:focus-visible, input:focus-visible, select:focus-visible { outline: 2px s
 .today-task-actions .text-button, .today-action-cluster .text-button { padding: 3px 4px; font: 9px 'DM Mono', monospace; text-transform: uppercase; }
 .danger-text { color: var(--red) !important; }
 .today-action-cluster { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; }
+.today-bulk-toolbar { display: flex; align-items: center; flex-wrap: wrap; gap: 10px; margin-bottom: 8px; padding: 8px 10px; border: 1px solid var(--line); background: var(--soft); color: var(--muted); font: 9px 'DM Mono', monospace; text-transform: uppercase; letter-spacing: .05em; }
+.bulk-select-control, .task-selection-control { display: inline-flex; align-items: center; gap: 7px; cursor: pointer; }
+.bulk-select-control input, .task-selection-control input { width: 15px; height: 15px; margin: 0; accent-color: var(--ink); cursor: pointer; }
+.bulk-selection-count { color: var(--ink); }
+.bulk-task-actions { display: inline-flex; flex-wrap: wrap; gap: 6px; margin-left: auto; }
+.bulk-task-actions .small { min-height: 26px; padding: 5px 8px; font-size: 8px; }
+.danger-button { color: var(--red) !important; border-color: var(--red) !important; }
+.task-selection-control { flex: 0 0 auto; }
+.task-selection-control input { border: 1px solid var(--ink); }
+.phase-one-drop-zone:has(.runway-row[draggable]) { transition: background .15s ease, border-color .15s ease; }
+.phase-one-drop-zone:hover { border-color: var(--ink); }
 .today-empty-panel { display: flex; flex-direction: column; gap: 6px; padding: 22px 16px; border: 1px dashed var(--line); color: var(--muted); font-size: 12px; line-height: 1.45; }
 .today-empty-panel strong { color: var(--ink); }
 .reference-button { min-height: 31px; padding: 7px 12px; font-size: 9px; letter-spacing: .09em; }
