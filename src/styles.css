@@ -145,6 +145,7 @@ button:focus-visible, input:focus-visible, select:focus-visible { outline: 2px s
 .sync-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--ink); }
 .today-reference-section { margin-top: 33px; }
 .today-reference-heading { display: flex; align-items: center; justify-content: space-between; gap: 15px; margin-bottom: 18px; }
+.today-reference-heading > div:first-child, .today-section-title-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
 .today-reference-heading h2, .reference-section-title { width: fit-content; margin: 0; padding-bottom: 7px; border-bottom: 2px solid var(--ink); color: var(--ink); font-size: 14px; line-height: 1; letter-spacing: .06em; text-transform: uppercase; }
 .today-reference-heading span { padding: 6px 9px; border: 1px solid var(--ink); color: var(--ink); font: 10px 'DM Mono', monospace; text-transform: uppercase; letter-spacing: .06em; white-space: nowrap; }
 .runway-panel { border: 1px solid var(--ink); }
@@ -156,6 +157,13 @@ button:focus-visible, input:focus-visible, select:focus-visible { outline: 2px s
 .runway-row.done .runway-title { color: var(--muted); text-decoration: line-through; }
 .minute-badge, .mini-minute { padding: 4px 7px; border: 1px solid var(--ink); color: var(--ink); font: 9px 'DM Mono', monospace; letter-spacing: .05em; text-transform: uppercase; white-space: nowrap; }
 .reference-action-row { display: flex; justify-content: flex-end; margin-top: 10px; }
+.today-add-button { color: var(--ink); font: 9px 'DM Mono', monospace; text-transform: uppercase; letter-spacing: .06em; white-space: nowrap; }
+.today-task-actions { display: inline-flex; flex: 0 0 auto; gap: 4px; }
+.today-task-actions .text-button, .today-action-cluster .text-button { padding: 3px 4px; font: 9px 'DM Mono', monospace; text-transform: uppercase; }
+.danger-text { color: var(--red) !important; }
+.today-action-cluster { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; }
+.today-empty-panel { display: flex; flex-direction: column; gap: 6px; padding: 22px 16px; border: 1px dashed var(--line); color: var(--muted); font-size: 12px; line-height: 1.45; }
+.today-empty-panel strong { color: var(--ink); }
 .reference-button { min-height: 31px; padding: 7px 12px; font-size: 9px; letter-spacing: .09em; }
 .reference-section-title { margin-bottom: 18px; }
 .main-outcome-card { position: relative; display: flex; min-height: 265px; border: 3px solid var(--ink); background: #fff; }
@@ -357,6 +365,16 @@ button:focus-visible, input:focus-visible, select:focus-visible { outline: 2px s
 .gmail-settings-card .gmail-actions { margin-top: 18px; }
 .gmail-scan-error { padding: 10px 11px; border: 1px solid var(--red); background: #fff6f5; color: var(--red); }
 .toast { position: fixed; right: 25px; bottom: 25px; z-index: 30; display: flex; align-items: center; gap: 8px; padding: 12px 15px; border: 1px solid var(--ink); background: var(--ink); color: white; box-shadow: 4px 4px 0 var(--yellow); font-size: 11px; }
+.task-editor-scrim { position: fixed; inset: 0; z-index: 40; display: grid; place-items: center; padding: 20px; background: rgba(23,23,23,.48); }
+.task-editor { width: min(620px, 100%); max-height: min(760px, calc(100vh - 40px)); overflow-y: auto; padding: 24px; border: 1px solid var(--ink); background: var(--paper); box-shadow: 7px 7px 0 var(--yellow); }
+.task-editor-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 15px; margin-bottom: 22px; padding-bottom: 15px; border-bottom: 1px solid var(--ink); }
+.task-editor h2 { margin: 7px 0 0; font-size: 25px; letter-spacing: -.06em; }
+.task-editor label { display: grid; gap: 7px; margin-top: 15px; color: var(--muted); font: 9px 'DM Mono', monospace; text-transform: uppercase; letter-spacing: .06em; }
+.task-editor input, .task-editor textarea, .task-editor select { width: 100%; border: 1px solid var(--line); border-radius: 0; padding: 10px 11px; background: var(--white); color: var(--ink); font: 13px 'Manrope', system-ui, sans-serif; text-transform: none; letter-spacing: normal; }
+.task-editor textarea { resize: vertical; line-height: 1.45; }
+.task-editor-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 0 12px; }
+.task-editor-note { margin: 15px 0 0; color: var(--muted); font-size: 11px; line-height: 1.45; }
+.task-editor-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 22px; padding-top: 16px; border-top: 1px solid var(--line); }
 .mobile-scrim { display: none; }
 
 @media (max-width: 980px) {
@@ -659,4 +677,11 @@ button:focus-visible, input:focus-visible, select:focus-visible { outline: 2px s
   .app-shell.today-mode .build-task { font-size: 12px !important; }
   .app-shell.today-mode .today-secondary-reference { grid-template-columns: 1fr !important; gap: 12px !important; }
   .app-shell.today-mode .today-info-card { min-height: 125px !important; padding: 13px !important; }
+  .app-shell.today-mode .today-reference-heading > div:first-child, .app-shell.today-mode .today-section-title-row { align-items: flex-start; flex-wrap: wrap; }
+  .app-shell.today-mode .runway-row { flex-wrap: wrap; }
+  .app-shell.today-mode .today-task-actions { margin-left: auto; }
+  .task-editor-grid { grid-template-columns: 1fr; }
+  .task-editor { padding: 18px; }
+  .task-editor-actions { flex-direction: column-reverse; }
+  .task-editor-actions .button { width: 100%; }
 }
