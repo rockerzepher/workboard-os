@@ -55,11 +55,14 @@ type Task = {
   completed: boolean;
   completedAt?: string;
   notes?: string;
+  successCriteria?: string[];
+  googleParentId?: string;
+  googleTodaySubtask?: boolean;
   role?: Role;
   waitingOn?: string;
 };
 
-type TaskEditorDraft = Pick<Task, "title" | "area" | "project" | "priority" | "due" | "estimate" | "notes" | "role">;
+type TaskEditorDraft = Pick<Task, "title" | "area" | "project" | "priority" | "due" | "estimate" | "notes" | "successCriteria" | "role">;
 
 type Project = {
   id: string;
@@ -74,6 +77,7 @@ const GOOGLE_CLIENT_ID_STORAGE_KEY = "workboard-google-client-id";
 const OBSIDIAN_VAULT_STORAGE_KEY = "workboard-obsidian-vault";
 const NOTION_REFERENCES_STORAGE_KEY = "workboard-notion-references";
 const ATTENTION_STATUS_STORAGE_KEY = "workboard-attention-status";
+const HIDDEN_GOOGLE_TASKS_STORAGE_KEY = "workboard-hidden-google-tasks";
 
 function readGoogleClientId() {
   try {
@@ -132,6 +136,16 @@ function readAttentionStatuses(): Record<string, AttentionStatus> {
   }
 }
 
+function readHiddenGoogleTasks() {
+  try {
+    const saved = localStorage.getItem(HIDDEN_GOOGLE_TASKS_STORAGE_KEY);
+    const parsed = saved ? JSON.parse(saved) as string[] : [];
+    return new Set(Array.isArray(parsed) ? parsed : []);
+  } catch {
+    return new Set<string>();
+  }
+}
+
 const verticals: Array<{ id: View; label: string; short: string; icon: typeof FolderOpen; description: string }> = [
   { id: "planning_repository", label: "Planning Repository", short: "Raw capture", icon: Inbox, description: "Unprocessed inputs waiting for a deliberate next step." },
   { id: "today", label: "Today", short: "Daily focus", icon: Target, description: "A small plan for clearing the runway and moving one outcome." },
@@ -153,12 +167,12 @@ function googleListContainer(listName: string): Container {
   return "planning_repository";
 }
 
-function localTaskFromGoogleRecord(record: GoogleTaskRecord, existing?: Task): Task {
+function localTaskFromGoogleRecord(record: GoogleTaskRecord, existing?: Task, googleTodaySubtask = false): Task {
   return {
     id: existing?.id ?? `google-${record.sourceId}`,
     sourceKey: record.sourceKey,
     title: record.title,
-    container: existing?.container ?? googleListContainer(record.listName),
+    container: googleTodaySubtask ? "today" : existing?.container ?? googleListContainer(record.listName),
     area: existing?.area ?? "Unassigned",
     project: existing?.project,
     priority: existing?.priority ?? "normal",
@@ -167,8 +181,30 @@ function localTaskFromGoogleRecord(record: GoogleTaskRecord, existing?: Task): T
     completed: record.completed,
     completedAt: record.completed ? existing?.completedAt ?? "From Google Tasks" : undefined,
     notes: record.notes,
+    successCriteria: existing?.successCriteria,
+    googleParentId: record.parentSourceId,
+    googleTodaySubtask,
     role: existing?.role,
   };
+}
+
+function googleTodaySubtaskIds(records: GoogleTaskRecord[]) {
+  const byId = new Map(records.map((record) => [record.sourceId, record]));
+  const todayIds = new Set(records.filter((record) => record.title.trim().toLowerCase() === "today").map((record) => record.sourceId));
+  const descendants = new Set<string>();
+  for (const record of records) {
+    const visited = new Set<string>();
+    let parentId = record.parentSourceId;
+    while (parentId && !visited.has(parentId)) {
+      if (todayIds.has(parentId)) {
+        descendants.add(record.sourceId);
+        break;
+      }
+      visited.add(parentId);
+      parentId = byId.get(parentId)?.parentSourceId;
+    }
+  }
+  return descendants;
 }
 
 const seedTasks: Task[] = [
@@ -237,13 +273,14 @@ function App() {
   const [gmailError, setGmailError] = useState<string | null>(null);
   const [gmailConnecting, setGmailConnecting] = useState(false);
   const [gmailConnected, setGmailConnected] = useState(false);
-  const [taskEditor, setTaskEditor] = useState<{ mode: "create" | "edit"; role: Exclude<Role, null>; task: Task } | null>(null);
+  const [taskEditor, setTaskEditor] = useState<{ mode: "create" | "edit"; role: Role; task: Task } | null>(null);
   const [notionStatus, setNotionStatus] = useState<NotionConnectionStatus>({ connected: false, configured: false });
   const [notionReferences, setNotionReferences] = useState<NotionReference[]>(readNotionReferences);
   const [notionResults, setNotionResults] = useState<NotionReference[]>([]);
   const [notionQuery, setNotionQuery] = useState("");
   const [notionSearching, setNotionSearching] = useState(false);
   const [attentionStatuses, setAttentionStatuses] = useState<Record<string, AttentionStatus>>(readAttentionStatuses);
+  const [hiddenGoogleTaskKeys, setHiddenGoogleTaskKeys] = useState<Set<string>>(readHiddenGoogleTasks);
 
   useEffect(() => {
     let active = true;
@@ -334,6 +371,10 @@ function App() {
     localStorage.setItem(ATTENTION_STATUS_STORAGE_KEY, JSON.stringify(attentionStatuses));
   }, [attentionStatuses]);
 
+  useEffect(() => {
+    localStorage.setItem(HIDDEN_GOOGLE_TASKS_STORAGE_KEY, JSON.stringify([...hiddenGoogleTaskKeys]));
+  }, [hiddenGoogleTaskKeys]);
+
   const filteredTasks = useMemo(() => tasks.filter((task) => {
     const matchesQuery = `${task.title} ${task.area} ${task.project ?? ""}`.toLowerCase().includes(query.toLowerCase());
     const matchesArea = areaFilter === "All areas" || task.area === areaFilter;
@@ -349,6 +390,7 @@ function App() {
   const quickClear = tasks.filter((task) => task.container === "today" && task.role === "quick_clear");
   const mainOutcome = tasks.find((task) => task.container === "today" && task.role === "main_outcome");
   const eveningTask = tasks.find((task) => task.container === "today" && task.role === "evening_build");
+  const todayTasks = tasks.filter((task) => task.container === "today" && !task.role);
 
   function flash(message: string) {
     setNotice(message);
@@ -359,7 +401,8 @@ function App() {
     setTasks((current) => {
       const localTasks = preview.mode === "live" ? current.filter((task) => !DEMO_TASK_IDS.has(task.id)) : current;
       const existingBySource = new Map(localTasks.filter((task) => task.sourceKey).map((task) => [task.sourceKey, task]));
-      const imported = preview.tasks.map((record) => localTaskFromGoogleRecord(record, existingBySource.get(record.sourceKey)));
+      const googleTodayIds = googleTodaySubtaskIds(preview.tasks);
+      const imported = preview.tasks.filter((record) => !hiddenGoogleTaskKeys.has(record.sourceKey)).map((record) => localTaskFromGoogleRecord(record, existingBySource.get(record.sourceKey), googleTodayIds.has(record.sourceId)));
       const importedBySource = new Map(imported.map((task) => [task.sourceKey, task]));
       const merged = localTasks.map((task) => task.sourceKey && importedBySource.has(task.sourceKey) ? importedBySource.get(task.sourceKey)! : task);
       const existingKeys = new Set(localTasks.map((task) => task.sourceKey).filter(Boolean));
@@ -367,7 +410,7 @@ function App() {
     });
   }
 
-  function openTodayTaskEditor(role: Exclude<Role, null>, task?: Task) {
+  function openTodayTaskEditor(role: Role, task?: Task) {
     setTaskEditor({ mode: task ? "edit" : "create", role, task: task ? { ...task } : { id: `local-${Date.now()}`, title: "", container: "today", area: "Unassigned", priority: "normal", source: "Manual", completed: false, role } });
   }
 
@@ -379,7 +422,7 @@ function App() {
     }
     const mode = taskEditor?.mode;
     setTasks((current) => {
-      const nextTask: Task = { ...draft, title, container: "today", source: draft.source === "Google Tasks" ? "Google Tasks" : "Manual" };
+      const nextTask: Task = { ...draft, title, container: "today", source: draft.source === "Google Tasks" ? "Google Tasks" : "Manual", successCriteria: draft.role === "main_outcome" ? (draft.successCriteria ?? []).map((criterion) => criterion.trim()).filter(Boolean) : undefined };
       const withoutRole = nextTask.role ? current.map((task) => task.id === nextTask.id ? task : task.role === nextTask.role ? { ...task, role: null } : task) : current;
       return mode === "edit" ? withoutRole.map((task) => task.id === nextTask.id ? nextTask : task) : [nextTask, ...withoutRole];
     });
@@ -389,8 +432,11 @@ function App() {
 
   function removeTodayTask(task: Task) {
     if (!window.confirm(`Remove “${task.title}” from Today? This only changes WorkBoard locally.`)) return;
+    if (task.source === "Google Tasks" && task.sourceKey) {
+      setHiddenGoogleTaskKeys((current) => new Set(current).add(task.sourceKey!));
+    }
     setTasks((current) => current.filter((item) => item.id !== task.id));
-    flash("Today task removed locally · source unchanged");
+    flash(task.source === "Google Tasks" ? "Google subtask hidden locally · source unchanged" : "Today task removed locally");
   }
 
   function clearDemoTasks() {
@@ -604,7 +650,7 @@ function App() {
       <main className="main-canvas">
         <div className="mobile-header"><span className="brand-mark">W</span><span>Work OS</span><span className="mobile-header-spacer" /><button className="icon-button" onClick={() => setMobileNav(true)} aria-label="Open navigation"><PanelLeft size={18} /></button></div>
         {view === "board" && <BoardOverview tasks={tasks} counts={counts} liveGoogleTasks={googleTasksConnected} navigate={navigate} onToggle={toggleTask} onReorder={reorderTask} />}
-        {view === "today" && <TodayView tasks={tasks} quickClear={quickClear} mainOutcome={mainOutcome} eveningTask={eveningTask} completedToday={completedToday} onToggle={toggleTask} onMove={moveTask} onRole={setRole} onExpand={setExpandedTask} expandedTask={expandedTask} onAddTask={openTodayTaskEditor} onEditTask={(task) => openTodayTaskEditor(task.role ?? "quick_clear", task)} onRemoveTask={removeTodayTask} />}
+        {view === "today" && <TodayView tasks={tasks} todayTasks={todayTasks} quickClear={quickClear} mainOutcome={mainOutcome} eveningTask={eveningTask} completedToday={completedToday} onToggle={toggleTask} onMove={moveTask} onRole={setRole} onExpand={setExpandedTask} expandedTask={expandedTask} onAddTask={openTodayTaskEditor} onEditTask={(task) => openTodayTaskEditor(task.role ?? null, task)} onRemoveTask={removeTodayTask} />}
         {view === "planning_repository" && <VerticalView view="planning_repository" tasks={filteredTasks.filter((task) => task.container === "planning_repository")} query={query} setQuery={setQuery} capture={capture} setCapture={setCapture} addCapture={addCapture} areaFilter={areaFilter} setAreaFilter={setAreaFilter} onToggle={toggleTask} onMove={moveTask} onRole={setRole} onReorder={reorderTask} onExpand={setExpandedTask} expandedTask={expandedTask} />}
         {view === "this_week" && <VerticalView view="this_week" tasks={filteredTasks.filter((task) => task.container === "this_week")} query={query} setQuery={setQuery} capture={capture} setCapture={setCapture} addCapture={addCapture} areaFilter={areaFilter} setAreaFilter={setAreaFilter} onToggle={toggleTask} onMove={moveTask} onRole={setRole} onReorder={reorderTask} onExpand={setExpandedTask} expandedTask={expandedTask} />}
         {view === "app_ideas" && <VerticalView view="app_ideas" tasks={filteredTasks.filter((task) => task.container === "app_ideas")} query={query} setQuery={setQuery} capture={capture} setCapture={setCapture} addCapture={addCapture} areaFilter={areaFilter} setAreaFilter={setAreaFilter} onToggle={toggleTask} onMove={moveTask} onRole={setRole} onReorder={reorderTask} onExpand={setExpandedTask} expandedTask={expandedTask} />}
@@ -674,7 +720,7 @@ function TaskDestinationSelect({ task, onMove, onRole, ariaLabel }: { task: Task
   return <select value={moveValue} onChange={(event) => handleMove(event.target.value)} aria-label={ariaLabel}><option value="planning_repository">Planning Repository</option><optgroup label="Today"><option value="today">Today · unassigned</option><option value="today:quick_clear">Phase 1 · Clear the runway</option><option value="today:main_outcome">Today’s one thing</option><option value="today:evening_build">Evening build</option></optgroup><option value="this_week">This Week</option><option value="projects">Projects</option><option value="app_ideas">App Ideas / Someday</option><option value="waiting_for">Waiting For</option></select>;
 }
 
-function TodayView({ tasks, quickClear, mainOutcome, eveningTask, completedToday, onToggle, onMove, onRole, onExpand, expandedTask, onAddTask, onEditTask, onRemoveTask }: { tasks: Task[]; quickClear: Task[]; mainOutcome?: Task; eveningTask?: Task; completedToday: number; onToggle: (id: string) => void; onMove: (id: string, container: Container) => void; onRole: (id: string, role: Role) => void; onExpand: (id: string | null) => void; expandedTask: string | null; onAddTask: (role: Exclude<Role, null>, task?: Task) => void; onEditTask: (task: Task) => void; onRemoveTask: (task: Task) => void }) {
+function TodayView({ tasks, todayTasks, quickClear, mainOutcome, eveningTask, completedToday, onToggle, onMove, onRole, onExpand, expandedTask, onAddTask, onEditTask, onRemoveTask }: { tasks: Task[]; todayTasks: Task[]; quickClear: Task[]; mainOutcome?: Task; eveningTask?: Task; completedToday: number; onToggle: (id: string) => void; onMove: (id: string, container: Container) => void; onRole: (id: string, role: Role) => void; onExpand: (id: string | null) => void; expandedTask: string | null; onAddTask: (role: Role, task?: Task) => void; onEditTask: (task: Task) => void; onRemoveTask: (task: Task) => void }) {
   const dueToday = tasks.filter((task) => task.container === "this_week" && !task.completed).slice(0, 2);
   const overdue = tasks.filter((task) => task.priority === "high" && task.container !== "today" && !task.completed).slice(0, 1);
   const recommended = tasks.filter((task) => task.container === "app_ideas" && !task.completed).slice(0, 1);
@@ -682,17 +728,23 @@ function TodayView({ tasks, quickClear, mainOutcome, eveningTask, completedToday
   const startClearing = () => { const next = quickClear.find((task) => !task.completed); if (next) onToggle(next.id); };
   return <div className="content-wrap today-page today-reference-layout"><PageHeader eyebrow="WORK BOARD / TODAY" title="Today" description="Start light, complete one important thing, then build in the evening." actions={<div className="today-date-status"><span className="today-date-chip">17 AUG</span><span className="sync-state"><span className="sync-dot" /> Synced</span></div>} />
     <section className="today-reference-section runway-section"><div className="today-reference-heading"><div><h2>Phase 1 — Clear the runway</h2><span>{completedRunway} of {quickClear.length} cleared</span></div><button className="text-button today-add-button" onClick={() => onAddTask("quick_clear")}>+ Add task</button></div><div className="runway-panel">{quickClear.length ? quickClear.map((task) => <div className={`runway-row ${task.completed ? "done" : ""}`} key={task.id}><button className={`reference-check ${task.completed ? "checked" : ""}`} onClick={() => onToggle(task.id)} aria-label={`Complete ${task.title}`}>{task.completed && <Check size={10} />}</button><button className="runway-title" onClick={() => onExpand(expandedTask === task.id ? null : task.id)}>{task.title}</button><span className="minute-badge">{task.estimate ?? 5} MIN</span><div className="today-task-actions"><button className="text-button" onClick={() => onEditTask(task)}>Edit</button><button className="text-button danger-text" onClick={() => onRemoveTask(task)}>Remove</button></div></div>) : <div className="today-empty-panel">No runway tasks yet. Add the quick wins you want to clear first.</div>}</div><div className="reference-action-row"><button className="button dark reference-button" onClick={startClearing} disabled={!quickClear.some((task) => !task.completed)}><Timer size={13} /> Start clearing</button></div></section>
-    <section className="today-reference-section"><div className="today-section-title-row"><h2 className="reference-section-title">Today’s main outcome</h2><button className="text-button today-add-button" onClick={() => onAddTask("main_outcome")}>{mainOutcome ? "Edit main task" : "+ Add main task"}</button></div><div className="main-outcome-card"><div className="outcome-rail" /><div className="main-outcome-content"><div className="outcome-tags"><span>Project: {mainOutcome?.project ?? "Unassigned"}</span><span>Area: {mainOutcome?.area ?? "Unassigned"}</span></div><h3>{mainOutcome?.title ?? "No main task assigned"}</h3><div className="expected-outcome"><span>Expected outcome</span><p>{mainOutcome?.notes ?? "Add the one result that would make today successful."}</p></div><div className="today-action-cluster">{mainOutcome ? <><button className="button dark reference-button" onClick={() => onToggle(mainOutcome.id)}>{mainOutcome.completed ? <Check size={13} /> : <ArrowRight size={13} />}{mainOutcome.completed ? "Completed" : "Start primary task"}</button><button className="button outline reference-button" onClick={() => onEditTask(mainOutcome)}>Edit</button><button className="text-button danger-text" onClick={() => onRemoveTask(mainOutcome)}>Remove</button></> : <button className="button dark reference-button" onClick={() => onAddTask("main_outcome")}><Plus size={13} /> Add main task</button>}</div></div></div></section>
+    <section className="today-reference-section"><div className="today-section-title-row"><h2 className="reference-section-title">Today’s main outcome</h2><button className="text-button today-add-button" onClick={() => onAddTask("main_outcome")}>{mainOutcome ? "Edit main task" : "+ Add main task"}</button></div><div className="main-outcome-card"><div className="outcome-rail" /><div className="main-outcome-content"><div className="outcome-tags"><span>Project: {mainOutcome?.project ?? "Unassigned"}</span><span>Area: {mainOutcome?.area ?? "Unassigned"}</span></div><h3>{mainOutcome?.title ?? "No main task assigned"}</h3><div className="expected-outcome"><span>Expected outcome</span><p>{mainOutcome?.notes ?? "Add the one result that would make today successful."}</p></div>{mainOutcome?.successCriteria?.length ? <div className="success-criteria"><span>Success criteria</span><ul>{mainOutcome.successCriteria.map((criterion) => <li key={criterion}>{criterion}</li>)}</ul></div> : null}<div className="today-action-cluster">{mainOutcome ? <><button className="button dark reference-button" onClick={() => onToggle(mainOutcome.id)}>{mainOutcome.completed ? <Check size={13} /> : <ArrowRight size={13} />}{mainOutcome.completed ? "Completed" : "Start primary task"}</button><button className="button outline reference-button" onClick={() => onEditTask(mainOutcome)}>Edit</button><button className="text-button danger-text" onClick={() => onRemoveTask(mainOutcome)}>Remove</button></> : <button className="button dark reference-button" onClick={() => onAddTask("main_outcome")}><Plus size={13} /> Add main task</button>}</div></div></div></section>
+    <section className="today-reference-section"><div className="today-reference-heading"><div><h2>Today tasks</h2><span>{todayTasks.length} local view</span></div><button className="text-button today-add-button" onClick={() => onAddTask(null)}>+ Add local task</button></div><div className="runway-panel">{todayTasks.length ? todayTasks.map((task) => <div className={`runway-row ${task.completed ? "done" : ""} ${task.googleTodaySubtask ? "google-subtask-row" : ""}`} key={task.id}><button className={`reference-check ${task.completed ? "checked" : ""}`} onClick={() => onToggle(task.id)} aria-label={task.completed ? `Reopen ${task.title}` : `Complete ${task.title}`}>{task.completed && <Check size={10} />}</button><button className="runway-title" onClick={() => onExpand(expandedTask === task.id ? null : task.id)}>{task.title}</button>{task.googleTodaySubtask && <span className="task-source-label">GOOGLE</span>}<span className="minute-badge">{task.estimate ?? 5} MIN</span><div className="today-task-actions"><button className="text-button" onClick={() => onEditTask(task)}>Edit</button><button className="text-button danger-text" onClick={() => onRemoveTask(task)}>{task.source === "Google Tasks" ? "Hide" : "Remove"}</button></div></div>) : <div className="today-empty-panel">No extra Today tasks yet. Google subtasks under a task named “Today” will appear here automatically.</div>}</div></section>
     <section className="today-reference-section"><div className="today-section-title-row"><h2 className="reference-section-title">Evening build</h2><button className="text-button today-add-button" onClick={() => onAddTask("evening_build")}>{eveningTask ? "Edit build" : "+ Add build task"}</button></div><div className="evening-build-card"><div className="evening-build-main">{eveningTask ? <><h3>{eveningTask.project ?? eveningTask.title}</h3><span className="build-outcome-tag">{eveningTask.notes ?? "Evening build task"}</span><div className="build-task"><button className={`reference-check ${eveningTask.completed ? "checked" : ""}`} onClick={() => onToggle(eveningTask.id)} aria-label={`Complete ${eveningTask.title}`}>{eveningTask.completed && <Check size={10} />}</button><span>{eveningTask.title}</span><span className="mini-minute">{eveningTask.estimate ?? 5}m</span></div></> : <div className="today-empty-panel"><strong>No evening build assigned</strong><span>Add one focused task for the evening.</span></div>}</div>{eveningTask && <div className="today-action-cluster"><button className="button outline reference-button" onClick={() => onToggle(eveningTask.id)}>{eveningTask.completed ? "Completed" : "Start build"}</button><button className="text-button" onClick={() => onEditTask(eveningTask)}>Edit</button><button className="text-button danger-text" onClick={() => onRemoveTask(eveningTask)}>Remove</button></div>}</div></section>
     <section className="today-secondary-reference"><TodayInfoCard title="Due today" count={dueToday.length} tasks={dueToday} onToggle={onToggle} /><TodayInfoCard title="Overdue" count={overdue.length} tasks={overdue} onToggle={onToggle} warning /><TodayInfoCard title="Recommended next" count={recommended.length} tasks={recommended} onToggle={onToggle} /></section>
   </div>;
 }
 
-function TodayTaskEditor({ mode, role, task, onCancel, onSave }: { mode: "create" | "edit"; role: Exclude<Role, null>; task: Task; onCancel: () => void; onSave: (task: Task) => void }) {
-  const [draft, setDraft] = useState<TaskEditorDraft>({ title: task.title, area: task.area, project: task.project, priority: task.priority, due: task.due, estimate: task.estimate, notes: task.notes, role });
+function TodayTaskEditor({ mode, role, task, onCancel, onSave }: { mode: "create" | "edit"; role: Role; task: Task; onCancel: () => void; onSave: (task: Task) => void }) {
+  const [draft, setDraft] = useState<TaskEditorDraft>({ title: task.title, area: task.area, project: task.project, priority: task.priority, due: task.due, estimate: task.estimate, notes: task.notes, successCriteria: task.successCriteria ?? [], role });
   const update = <K extends keyof TaskEditorDraft>(key: K, value: TaskEditorDraft[K]) => setDraft((current) => ({ ...current, [key]: value }));
-  const roleLabel = role === "quick_clear" ? "Phase 1 · Clear the runway" : role === "main_outcome" ? "Today’s main task" : "Evening build";
-  return <div className="task-editor-scrim" role="presentation" onMouseDown={(event) => event.target === event.currentTarget && onCancel()}><form className="task-editor" onSubmit={(event) => { event.preventDefault(); onSave({ ...task, ...draft, role }); }}><div className="task-editor-header"><div><span className="eyebrow">TODAY / {mode === "edit" ? "EDIT TASK" : "NEW TASK"}</span><h2>{roleLabel}</h2></div><button type="button" className="icon-button" onClick={onCancel} aria-label="Close task editor"><X size={18} /></button></div><label>Task title<input autoFocus value={draft.title} onChange={(event) => update("title", event.target.value)} placeholder="What needs to happen?" /></label><label>Notes or expected outcome<textarea value={draft.notes ?? ""} onChange={(event) => update("notes", event.target.value)} placeholder="What does done look like?" rows={3} /></label><div className="task-editor-grid"><label>Area<select value={draft.area} onChange={(event) => update("area", event.target.value)}>{areas.map((area) => <option key={area}>{area}</option>)}</select></label><label>Project<input value={draft.project ?? ""} onChange={(event) => update("project", event.target.value)} placeholder="Optional" /></label><label>Priority<select value={draft.priority} onChange={(event) => update("priority", event.target.value as Task["priority"])}><option value="low">Low</option><option value="normal">Normal</option><option value="high">High</option></select></label><label>Due date<input type="date" value={draft.due ?? ""} onChange={(event) => update("due", event.target.value || undefined)} /></label><label>Minutes<input type="number" min="1" value={draft.estimate ?? 5} onChange={(event) => update("estimate", Number(event.target.value) || 5)} /></label></div><p className="task-editor-note">Changes here stay in WorkBoard. Provider tasks remain read-only.</p><div className="task-editor-actions"><button type="button" className="button outline" onClick={onCancel}>Cancel</button><button type="submit" className="button dark">{mode === "edit" ? "Save changes" : "Add to Today"}</button></div></form></div>;
+  const roleLabel = role === "quick_clear" ? "Phase 1 · Clear the runway" : role === "main_outcome" ? "Today’s main task" : role === "evening_build" ? "Evening build" : "Today task";
+  const outcomeField = role === "main_outcome";
+  const successCriteria = draft.successCriteria ?? [];
+  const addSuccessCriterion = () => update("successCriteria", [...successCriteria, ""]);
+  const updateSuccessCriterion = (index: number, value: string) => update("successCriteria", successCriteria.map((criterion, criterionIndex) => criterionIndex === index ? value : criterion));
+  const removeSuccessCriterion = (index: number) => update("successCriteria", successCriteria.filter((_, criterionIndex) => criterionIndex !== index));
+  return <div className="task-editor-scrim" role="presentation" onMouseDown={(event) => event.target === event.currentTarget && onCancel()}><form className="task-editor" onSubmit={(event) => { event.preventDefault(); onSave({ ...task, ...draft, role }); }}><div className="task-editor-header"><div><span className="eyebrow">TODAY / {mode === "edit" ? "EDIT TASK" : "NEW TASK"}</span><h2>{roleLabel}</h2></div><button type="button" className="icon-button" onClick={onCancel} aria-label="Close task editor"><X size={18} /></button></div><label>Task title<input autoFocus value={draft.title} onChange={(event) => update("title", event.target.value)} placeholder="What needs to happen?" /></label><label>{outcomeField ? "Expected outcome" : "Notes or expected outcome"}<textarea value={draft.notes ?? ""} onChange={(event) => update("notes", event.target.value)} placeholder={outcomeField ? "Add the one result that would make today successful." : "What does done look like?"} rows={3} /></label>{outcomeField && <div className="success-criteria-editor"><div className="field-label-row"><span>Success criteria</span><button type="button" className="text-button" onClick={addSuccessCriterion}>+ Add criterion</button></div>{successCriteria.map((criterion, index) => <div className="success-criterion-row" key={`criterion-${index}`}><input value={criterion} onChange={(event) => updateSuccessCriterion(index, event.target.value)} placeholder={`Criterion ${index + 1}`} /><button type="button" className="icon-button remove-criterion" onClick={() => removeSuccessCriterion(index)} aria-label={`Remove criterion ${index + 1}`}><X size={15} /></button></div>)}{successCriteria.length === 0 && <p className="field-hint">Optional. Add the concrete outputs that show the primary outcome is complete.</p>}</div>}<div className="task-editor-grid"><label>Area<select value={draft.area} onChange={(event) => update("area", event.target.value)}>{areas.map((area) => <option key={area}>{area}</option>)}</select></label><label>Project<input value={draft.project ?? ""} onChange={(event) => update("project", event.target.value)} placeholder="Optional" /></label><label>Priority<select value={draft.priority} onChange={(event) => update("priority", event.target.value as Task["priority"])}><option value="low">Low</option><option value="normal">Normal</option><option value="high">High</option></select></label><label>Due date<input type="date" value={draft.due ?? ""} onChange={(event) => update("due", event.target.value || undefined)} /></label><label>Minutes<input type="number" min="1" value={draft.estimate ?? 5} onChange={(event) => update("estimate", Number(event.target.value) || 5)} /></label></div><p className="task-editor-note">Changes here stay in WorkBoard. Provider tasks remain read-only.</p><div className="task-editor-actions"><button type="button" className="button outline" onClick={onCancel}>Cancel</button><button type="submit" className="button dark">{mode === "edit" ? "Save changes" : "Add to Today"}</button></div></form></div>;
 }
 
 function TodayInfoCard({ title, count, tasks, onToggle, warning = false }: { title: string; count: number; tasks: Task[]; onToggle: (id: string) => void; warning?: boolean }) {

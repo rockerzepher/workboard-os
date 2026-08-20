@@ -156,6 +156,7 @@ button:focus-visible, input:focus-visible, select:focus-visible { outline: 2px s
 .runway-title { flex: 1; min-width: 0; border: 0; padding: 0; overflow: hidden; background: transparent; color: var(--ink); text-align: left; font-size: 13px; text-overflow: ellipsis; white-space: nowrap; }
 .runway-row.done .runway-title { color: var(--muted); text-decoration: line-through; }
 .minute-badge, .mini-minute { padding: 4px 7px; border: 1px solid var(--ink); color: var(--ink); font: 9px 'DM Mono', monospace; letter-spacing: .05em; text-transform: uppercase; white-space: nowrap; }
+.task-source-label { padding: 4px 6px; border: 1px solid var(--line); color: var(--muted); font: 8px 'DM Mono', monospace; letter-spacing: .05em; white-space: nowrap; }
 .reference-action-row { display: flex; justify-content: flex-end; margin-top: 10px; }
 .today-add-button { color: var(--ink); font: 9px 'DM Mono', monospace; text-transform: uppercase; letter-spacing: .06em; white-space: nowrap; }
 .today-task-actions { display: inline-flex; flex: 0 0 auto; gap: 4px; }
@@ -176,6 +177,9 @@ button:focus-visible, input:focus-visible, select:focus-visible { outline: 2px s
 .expected-outcome { margin-top: auto; padding-top: 13px; border-top: 1px solid var(--ink); }
 .expected-outcome span, .build-columns h4 { display: block; margin-bottom: 7px; color: var(--ink); font: 9px 'DM Mono', monospace; letter-spacing: .09em; text-transform: uppercase; }
 .expected-outcome p { max-width: 690px; margin: 0; color: var(--ink); font-size: 13px; font-weight: 700; line-height: 1.45; }
+.success-criteria { padding-top: 2px; }
+.success-criteria > span, .field-label-row > span { display: block; margin-bottom: 7px; color: var(--ink); font: 9px 'DM Mono', monospace; letter-spacing: .09em; text-transform: uppercase; }
+.success-criteria ul { display: grid; gap: 5px; margin: 0; padding-left: 18px; color: var(--ink); font-size: 12px; line-height: 1.4; }
 .evening-build-card { display: flex; align-items: flex-end; gap: 28px; padding: 25px; border: 2px solid var(--ink); background: #fff; }
 .evening-build-main { flex: 1; min-width: 0; }
 .evening-build-main h3 { margin: 0 0 8px; color: var(--ink); font-size: 24px; line-height: 1; letter-spacing: -.06em; }
@@ -372,6 +376,13 @@ button:focus-visible, input:focus-visible, select:focus-visible { outline: 2px s
 .task-editor label { display: grid; gap: 7px; margin-top: 15px; color: var(--muted); font: 9px 'DM Mono', monospace; text-transform: uppercase; letter-spacing: .06em; }
 .task-editor input, .task-editor textarea, .task-editor select { width: 100%; border: 1px solid var(--line); border-radius: 0; padding: 10px 11px; background: var(--white); color: var(--ink); font: 13px 'Manrope', system-ui, sans-serif; text-transform: none; letter-spacing: normal; }
 .task-editor textarea { resize: vertical; line-height: 1.45; }
+.success-criteria-editor { margin-top: 15px; }
+.field-label-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.field-label-row > span { margin: 0; }
+.success-criterion-row { display: flex; align-items: center; gap: 6px; margin-top: 8px; }
+.success-criterion-row input { flex: 1; }
+.remove-criterion { flex: 0 0 auto; padding: 5px; color: var(--muted); }
+.field-hint { margin: 8px 0 0; color: var(--muted); font-size: 11px; line-height: 1.4; }
 .task-editor-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 0 12px; }
 .task-editor-note { margin: 15px 0 0; color: var(--muted); font-size: 11px; line-height: 1.45; }
 .task-editor-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 22px; padding-top: 16px; border-top: 1px solid var(--line); }
