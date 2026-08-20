@@ -15,6 +15,7 @@ export type GmailScan = {
   accountLabel: string;
   mode: "live";
   scannedDays: number;
+  scannedAt: string;
   candidates: GmailCandidate[];
 };
 

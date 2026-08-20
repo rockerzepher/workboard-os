@@ -121,7 +121,7 @@ async function scanMailbox(accessToken: string) {
     candidates.push({ id: message.id, threadId: message.threadId, kind: "incoming_attention", ...details, snippet: message.snippet ?? "", reason: "Recent incoming message that is not classified as marketing, social, or bulk mail.", suggestedAction: "Review and decide whether it needs a WorkBoard action.", sourceUrl: `https://mail.google.com/mail/u/0/#all/${message.threadId}` });
   }
 
-  return { accountLabel: profile.payload.emailAddress ? `Gmail · ${profile.payload.emailAddress}` : "Connected Gmail account", mode: "live" as const, scannedDays: 7, candidates: candidates.slice(0, 40) };
+  return { accountLabel: profile.payload.emailAddress ? `Gmail · ${profile.payload.emailAddress}` : "Connected Gmail account", mode: "live" as const, scannedDays: 7, scannedAt: new Date().toISOString(), candidates: candidates.slice(0, 40) };
 }
 
 export default async (request: Request, context: Context) => {
@@ -140,7 +140,7 @@ export default async (request: Request, context: Context) => {
     const state = crypto.randomUUID();
     await sessions.setJSON(`session:${sessionId}`, { state });
     const authorizationUrl = new URL("https://accounts.google.com/o/oauth2/v2/auth");
-    authorizationUrl.search = new URLSearchParams({ client_id: clientId, redirect_uri: redirectUri, response_type: "code", scope: GMAIL_SCOPE, access_type: "offline", prompt: "consent", state }).toString();
+    authorizationUrl.search = new URLSearchParams({ client_id: clientId, redirect_uri: redirectUri, response_type: "code", scope: GMAIL_SCOPE, access_type: "offline", prompt: session?.refreshToken ? "select_account" : "consent", state }).toString();
     return new Response(null, { status: 302, headers: { Location: authorizationUrl.toString(), "Set-Cookie": cookieHeader(sessionId, request, 600) } });
   }
   if (action === "callback") {
