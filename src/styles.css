@@ -274,7 +274,16 @@ button:focus-visible, input:focus-visible, select:focus-visible { outline: 2px s
 .attention-score span { color: var(--yellow); font: 32px 'DM Mono', monospace; letter-spacing: -.1em; }
 .attention-banner strong { font-size: 13px; }
 .attention-banner p { margin: 4px 0 0; color: #c6c6c1; font-size: 11px; }
-.attention-list { display: grid; gap: 12px; max-width: 860px; }
+.attention-categories { display: grid; gap: 12px; max-width: 860px; }
+.attention-category { border: 1px solid var(--line); background: #fbfbf8; }
+.attention-category-header { display: flex; align-items: center; width: 100%; gap: 12px; padding: 16px 18px; border: 0; background: transparent; color: var(--ink); text-align: left; }
+.attention-category-header > span:first-child { display: grid; gap: 4px; flex: 1; }
+.attention-category-header strong { font-size: 14px; letter-spacing: -.03em; }
+.attention-category-header small { color: var(--muted); font: 9px 'DM Mono', monospace; text-transform: uppercase; }
+.attention-category-count { display: grid; place-items: center; width: 28px; height: 28px; border: 1px solid var(--ink); border-radius: 50%; background: var(--yellow); font: 11px 'DM Mono', monospace; }
+.attention-category-header > svg { transition: transform .18s ease; }
+.attention-category-header[aria-expanded="true"] > svg { transform: rotate(180deg); }
+.attention-category-list { display: grid; gap: 12px; padding: 0 12px 12px; }
 .attention-card { padding: 18px 20px; border: 1px solid var(--line); border-left: 4px solid var(--yellow); background: #fbfbf8; }
 .attention-card.high { border-left-color: var(--red); }
 .attention-card.low { border-left-color: var(--green); }
