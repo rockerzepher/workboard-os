@@ -367,6 +367,108 @@ button:focus-visible, input:focus-visible, select:focus-visible { outline: 2px s
   .project-layout { grid-template-columns: 1fr; }
   .project-detail { min-height: auto; }
 }
+
+/* Mobile layout: use the full viewport instead of shrinking the desktop canvas. */
+@media (max-width: 720px) {
+  .app-shell.board-mode, .app-shell.today-mode { --sidebar: 268px; }
+  .app-shell.board-mode .sidebar, .app-shell.today-mode .sidebar { width: var(--sidebar); flex-basis: var(--sidebar); transform: translateX(-100%); padding: 29px 20px 22px; box-shadow: 7px 0 0 rgba(0,0,0,.06); }
+  .app-shell.board-mode .sidebar.sidebar-open, .app-shell.today-mode .sidebar.sidebar-open { transform: translateX(0); }
+  .app-shell.board-mode .sidebar-brand, .app-shell.today-mode .sidebar-brand { align-items: center; gap: 11px; padding: 0 8px 33px; }
+  .app-shell.board-mode .sidebar-brand .brand-mark, .app-shell.today-mode .sidebar-brand .brand-mark { width: 34px; height: 34px; font-size: 16px; }
+  .app-shell.board-mode .sidebar-brand .brand-title, .app-shell.board-mode .sidebar-brand .eyebrow, .app-shell.today-mode .sidebar-brand .brand-title, .app-shell.today-mode .sidebar-brand .eyebrow { display: block; }
+  .app-shell.board-mode .board-parent, .app-shell.today-mode .board-parent { justify-content: flex-start; gap: 10px; padding: 10px 11px; border-left: 3px solid var(--ink); font-size: 13px; text-align: left; }
+  .app-shell.board-mode .board-parent span, .app-shell.today-mode .board-parent span { max-width: none; }
+  .app-shell.board-mode .board-chevron, .app-shell.today-mode .board-chevron { display: block; }
+  .app-shell.board-mode .sidebar-nav, .app-shell.today-mode .sidebar-nav { margin: 2px 0 0 17px; padding: 5px 0 7px; border-left: 1px solid var(--line); }
+  .app-shell.board-mode .nav-item, .app-shell.board-mode .context-item, .app-shell.today-mode .nav-item, .app-shell.today-mode .context-item { justify-content: flex-start; gap: 10px; padding: 9px 9px 9px 13px; font-size: 12px; line-height: 1.2; text-align: left; }
+  .app-shell.board-mode .nav-item, .app-shell.today-mode .nav-item { flex-direction: row; }
+  .app-shell.board-mode .nav-item .nav-count, .app-shell.today-mode .nav-item .nav-count { margin-left: auto; font-size: 10px; }
+  .app-shell.board-mode .context-item, .app-shell.today-mode .context-item { flex-direction: row; }
+  .app-shell.board-mode .context-item svg, .app-shell.today-mode .context-item svg { width: 16px; height: 16px; }
+  .app-shell.board-mode .review-dot, .app-shell.today-mode .review-dot { width: 18px; height: 18px; margin-left: auto; font-size: 10px; }
+  .app-shell.board-mode .footer-divider, .app-shell.today-mode .footer-divider { margin: 12px 0; }
+  .app-shell.board-mode .sidebar-close, .app-shell.today-mode .sidebar-close { display: grid; }
+  .app-shell.board-mode .mobile-header, .app-shell.today-mode .mobile-header { display: flex; }
+  .app-shell.board-mode .mobile-menu, .app-shell.today-mode .mobile-menu { display: none; }
+  .app-shell.board-mode .main-canvas, .app-shell.today-mode .main-canvas { width: 100%; margin-left: 0; }
+
+  .content-wrap { padding: 24px 16px 48px; }
+  .page-header { gap: 16px; padding-bottom: 18px; }
+  .page-header h1 { font-size: 38px; }
+  .page-description { font-size: 13px; }
+  .header-actions, .header-actions .button { width: 100%; }
+
+  .board-overview-page { padding-top: 24px; }
+  .board-overview-page .page-header { align-items: flex-start; flex-direction: column; gap: 16px; padding-bottom: 18px; }
+  .board-overview-page .page-header h1 { margin-top: 4px; font-size: 31px; letter-spacing: -.07em; }
+  .board-overview-page .page-header .eyebrow { font-size: 8px; }
+  .board-overview-page .page-description { margin-top: 5px; font-size: 9px; }
+  .board-overview-page .board-intro { gap: 8px; padding: 16px 0 12px; font-size: 8px; }
+  .board-overview-page .board-grid { grid-template-columns: 1fr; gap: 12px; overflow: visible; }
+  .board-overview-page .board-column { min-height: 0; padding: 0 14px 14px; }
+  .board-overview-page .column-heading { width: calc(100% + 28px); margin: 0 -14px; padding: 14px; gap: 10px; }
+  .board-overview-page .column-icon { width: 28px; height: 28px; }
+  .board-overview-page .column-heading strong { font-size: 13px; line-height: 1.1; }
+  .board-overview-page .column-heading small { font-size: 9px; }
+  .board-overview-page .column-count { font-size: 19px; }
+  .board-overview-page .preview-stack { padding-top: 10px; }
+  .board-overview-page .preview-card { gap: 8px; padding: 10px 0; font-size: 12px; }
+  .board-overview-page .mini-check { width: 15px; height: 15px; }
+  .board-overview-page .mini-check svg { width: 12px; height: 12px; }
+  .board-overview-page .empty-preview { padding: 25px 0 15px; font-size: 12px; }
+  .board-overview-page .view-all { padding-top: 18px; font-size: 10px; }
+  .board-overview-page .board-footer-note { display: flex; margin-top: 18px; padding: 12px; font-size: 10px; line-height: 1.4; }
+
+  .app-shell.today-mode .content-wrap { padding: 24px 16px 48px; }
+  .app-shell.today-mode .today-reference-layout .page-header { align-items: flex-start; flex-direction: column; gap: 16px; margin-bottom: 24px; padding-bottom: 18px; }
+  .app-shell.today-mode .today-reference-layout .page-header h1 { margin-top: 4px; font-size: 38px; }
+  .app-shell.today-mode .today-reference-layout .page-header .eyebrow { font-size: 8px; }
+  .app-shell.today-mode .today-reference-layout .page-description { max-width: none; margin-top: 5px; font-size: 13px; line-height: 1.5; }
+  .app-shell.today-mode .today-reference-layout .header-actions { width: 100%; }
+  .app-shell.today-mode .today-date-status { flex-direction: row; align-items: center; gap: 10px; }
+  .app-shell.today-mode .today-date-chip { padding: 5px 10px; font-size: 10px; }
+  .app-shell.today-mode .sync-state { gap: 6px; font-size: 10px; }
+  .app-shell.today-mode .sync-dot { width: 7px; height: 7px; }
+  .app-shell.today-mode .today-reference-section { margin-top: 28px; }
+  .app-shell.today-mode .today-reference-heading { gap: 10px; margin-bottom: 14px; }
+  .app-shell.today-mode .today-reference-heading h2, .app-shell.today-mode .reference-section-title { font-size: 13px; }
+  .app-shell.today-mode .today-reference-heading span { padding: 5px 8px; font-size: 9px; }
+  .app-shell.today-mode .runway-row { gap: 10px; min-height: 44px; padding: 8px 12px; }
+  .app-shell.today-mode .reference-check { width: 17px; height: 17px; border-width: 2px; }
+  .app-shell.today-mode .runway-title { font-size: 13px; white-space: normal; }
+  .app-shell.today-mode .minute-badge, .app-shell.today-mode .mini-minute { padding: 4px 7px; font-size: 9px; }
+  .app-shell.today-mode .reference-action-row { margin-top: 10px; }
+  .app-shell.today-mode .reference-button { min-height: 31px; padding: 7px 12px; font-size: 9px; }
+  .app-shell.today-mode .reference-section-title { margin-bottom: 14px; }
+  .app-shell.today-mode .main-outcome-card { min-height: 240px; border-width: 2px; }
+  .app-shell.today-mode .outcome-rail { width: 8px; flex-basis: 8px; }
+  .app-shell.today-mode .main-outcome-content { gap: 14px; padding: 24px 20px 22px 18px; }
+  .app-shell.today-mode .outcome-tags { gap: 6px; }
+  .app-shell.today-mode .outcome-tags span, .app-shell.today-mode .build-outcome-tag { padding: 5px 7px; font-size: 8px; }
+  .app-shell.today-mode .main-outcome-content h3 { font-size: 31px; }
+  .app-shell.today-mode .expected-outcome { padding-top: 12px; }
+  .app-shell.today-mode .expected-outcome span, .app-shell.today-mode .build-columns h4 { margin-bottom: 6px; font-size: 8px; }
+  .app-shell.today-mode .expected-outcome p { font-size: 12px; line-height: 1.45; }
+  .app-shell.today-mode .evening-build-card { align-items: stretch; flex-direction: column; gap: 18px; padding: 18px; border-width: 2px; }
+  .app-shell.today-mode .evening-build-main h3 { margin-bottom: 8px; font-size: 22px; }
+  .app-shell.today-mode .build-outcome-tag { margin-bottom: 18px; }
+  .app-shell.today-mode .build-columns { grid-template-columns: 1fr; gap: 18px; }
+  .app-shell.today-mode .build-task { gap: 8px; font-size: 12px; line-height: 1.35; }
+  .app-shell.today-mode .build-start { align-self: flex-start; min-width: 0; }
+  .app-shell.today-mode .today-secondary-reference { grid-template-columns: 1fr; gap: 12px; margin-top: 24px; padding-top: 20px; }
+  .app-shell.today-mode .today-info-card { min-height: 125px; padding: 13px; }
+  .app-shell.today-mode .today-info-heading { gap: 8px; margin-bottom: 12px; padding-bottom: 7px; }
+  .app-shell.today-mode .today-info-heading h3 { font-size: 10px; }
+  .app-shell.today-mode .today-info-heading > span { padding: 2px 5px; font-size: 8px; }
+  .app-shell.today-mode .today-info-task { gap: 8px; margin-top: 9px; font-size: 11px; }
+  .app-shell.today-mode .today-info-task small { margin-top: 3px; padding: 2px 4px; font-size: 8px; }
+
+  .attention-banner { align-items: flex-start; flex-direction: column; gap: 13px; }
+  .attention-score { padding-right: 0; padding-bottom: 12px; border-right: 0; border-bottom: 1px solid #5f5f5b; }
+  .attention-category-list .attention-card-foot { align-items: flex-start; flex-direction: column; }
+  .attention-actions { flex-wrap: wrap; }
+  .settings-actions, .google-setup-actions { flex-wrap: wrap; }
+}
 @media (max-width: 720px) {
   :root { --sidebar: 268px; }
   .sidebar { transform: translateX(-100%); transition: transform .18s ease; box-shadow: 7px 0 0 rgba(0,0,0,.06); }
@@ -516,4 +618,45 @@ button:focus-visible, input:focus-visible, select:focus-visible { outline: 2px s
   .app-shell.today-mode .today-info-task { gap: 3px; margin-top: 4px; font-size: 5px; line-height: 1.2; }
   .app-shell.today-mode .today-info-task small { margin-top: 2px; padding: 1px 2px; font-size: 4px; }
   .app-shell.today-mode .today-empty-copy { font-size: 4px; }
+}
+
+/* Final mobile overrides: these intentionally come after the legacy dense-board rules. */
+@media (max-width: 720px) {
+  .app-shell.board-mode, .app-shell.today-mode { --sidebar: 268px !important; }
+  .app-shell.board-mode .sidebar, .app-shell.today-mode .sidebar { width: 268px !important; flex-basis: 268px !important; transform: translateX(-100%) !important; padding: 29px 20px 22px !important; }
+  .app-shell.board-mode .sidebar.sidebar-open, .app-shell.today-mode .sidebar.sidebar-open { transform: translateX(0) !important; }
+  .app-shell.board-mode .mobile-header, .app-shell.today-mode .mobile-header { display: flex !important; }
+  .app-shell.board-mode .mobile-menu, .app-shell.today-mode .mobile-menu { display: none !important; }
+  .app-shell.board-mode .main-canvas, .app-shell.today-mode .main-canvas { width: 100% !important; margin-left: 0 !important; }
+
+  .app-shell.board-mode .board-grid { grid-template-columns: 1fr !important; gap: 12px !important; overflow: visible !important; }
+  .app-shell.board-mode .board-column { min-height: 0 !important; padding: 0 14px 14px !important; }
+  .app-shell.board-mode .column-heading { width: calc(100% + 28px) !important; margin: 0 -14px !important; padding: 14px !important; gap: 10px !important; }
+  .app-shell.board-mode .column-icon { width: 28px !important; height: 28px !important; }
+  .app-shell.board-mode .column-heading strong { font-size: 13px !important; }
+  .app-shell.board-mode .column-heading small { font-size: 9px !important; }
+  .app-shell.board-mode .column-count { font-size: 19px !important; }
+  .app-shell.board-mode .preview-stack { padding-top: 10px !important; }
+  .app-shell.board-mode .preview-card { gap: 8px !important; padding: 10px 0 !important; font-size: 12px !important; }
+  .app-shell.board-mode .mini-check { width: 15px !important; height: 15px !important; }
+  .app-shell.board-mode .mini-check svg { width: 12px !important; height: 12px !important; }
+  .app-shell.board-mode .view-all { padding-top: 18px !important; font-size: 10px !important; }
+  .app-shell.board-mode .board-footer-note { display: flex !important; margin-top: 18px !important; padding: 12px !important; font-size: 10px !important; }
+
+  .app-shell.today-mode .today-reference-layout .page-header { align-items: flex-start !important; flex-direction: column !important; gap: 16px !important; margin-bottom: 24px !important; padding-bottom: 18px !important; }
+  .app-shell.today-mode .today-reference-layout .page-header h1 { font-size: 38px !important; }
+  .app-shell.today-mode .today-reference-layout .page-description { max-width: none !important; font-size: 13px !important; line-height: 1.5 !important; }
+  .app-shell.today-mode .today-reference-layout .header-actions { width: 100% !important; }
+  .app-shell.today-mode .today-reference-section { margin-top: 28px !important; }
+  .app-shell.today-mode .runway-row { min-height: 44px !important; padding: 8px 12px !important; }
+  .app-shell.today-mode .runway-title { font-size: 13px !important; white-space: normal !important; }
+  .app-shell.today-mode .main-outcome-card { min-height: 240px !important; }
+  .app-shell.today-mode .main-outcome-content h3 { font-size: 31px !important; }
+  .app-shell.today-mode .expected-outcome p { font-size: 12px !important; }
+  .app-shell.today-mode .evening-build-card { align-items: stretch !important; flex-direction: column !important; gap: 18px !important; padding: 18px !important; }
+  .app-shell.today-mode .evening-build-main h3 { font-size: 22px !important; }
+  .app-shell.today-mode .build-columns { grid-template-columns: 1fr !important; gap: 18px !important; }
+  .app-shell.today-mode .build-task { font-size: 12px !important; }
+  .app-shell.today-mode .today-secondary-reference { grid-template-columns: 1fr !important; gap: 12px !important; }
+  .app-shell.today-mode .today-info-card { min-height: 125px !important; padding: 13px !important; }
 }
