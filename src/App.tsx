@@ -735,16 +735,16 @@ function SettingsView({ flash, obsidianPreview, savedObsidianVault, onObsidianFi
             </>
           )}
         </section>
-        <section className="settings-card">
+        <section className="settings-card gmail-settings-card">
           <div className="settings-card-heading"><div className="settings-icon"><Bell size={19} /></div><div><h2>Communications Scout</h2><p>Read-only Gmail intelligence</p></div><span className={`connection-state ${gmailConnected ? "connected" : ""}`}>{gmailConnecting ? "SCANNING…" : gmailConnected ? "CONNECTED" : "NOT CONNECTED"}</span></div>
           {gmailConnected ? <>
             <div className="google-preview-status"><strong>{gmailScan?.accountLabel ?? "Connected Gmail account"}</strong><span>{gmailScan ? `${gmailScan.candidates.length} candidate emails · last 7 days` : "Restoring saved connection…"}</span></div>
             {gmailScan && <div className="gmail-candidate-list">{gmailScan.candidates.slice(0, 5).map((candidate) => <article className="gmail-candidate" key={candidate.id}><div><strong>{candidate.kind === "sent_follow_up" ? "FOLLOW UP" : "INCOMING"} · {candidate.subject}</strong><span>{candidate.sender} · {candidate.date}</span></div><a href={candidate.sourceUrl} target="_blank" rel="noreferrer">OPEN</a></article>)}</div>}
-            <div className="settings-actions"><button className="button outline small" onClick={onGmailConnect} disabled={gmailConnecting}>Reconnect Gmail</button><button className="button outline small" onClick={onGmailScan} disabled={gmailConnecting}>{gmailConnecting ? "Scanning…" : "Scan again"}</button></div>
+            <div className="settings-actions gmail-actions"><button className="button outline small" onClick={onGmailConnect} disabled={gmailConnecting}>Reconnect Gmail</button><button className="button outline small" onClick={onGmailScan} disabled={gmailConnecting}>{gmailConnecting ? "Scanning…" : "Scan again"}</button></div>
             <p className="settings-copy">The Communications Scout reads message metadata and snippets only. It never sends, deletes, archives, or changes email.</p>
           </> : <>
             <p className="settings-copy">Find sent messages from the past seven days that may need follow-up, plus important incoming mail while filtering obvious marketing and bulk traffic.</p>
-            <div className="settings-actions"><button className="button dark" onClick={onGmailConnect} disabled={gmailConnecting}>{gmailConnecting ? "Connecting…" : "Connect Gmail read-only"}</button></div>
+            <div className="settings-actions gmail-actions"><button className="button dark" onClick={onGmailConnect} disabled={gmailConnecting}>{gmailConnecting ? "Connecting…" : "Connect Gmail read-only"}</button></div>
           </>}
         </section>
         <section className="settings-card">

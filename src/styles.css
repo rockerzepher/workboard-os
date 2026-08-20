@@ -345,6 +345,7 @@ button:focus-visible, input:focus-visible, select:focus-visible { outline: 2px s
 .settings-copy { max-width: 440px; margin: 22px 0; color: var(--muted); font-size: 12px; line-height: 1.55; }
 .sync-status { display: flex; align-items: center; margin: 21px 0; color: var(--muted); font-size: 12px; }
 .settings-actions { display: flex; gap: 8px; margin-top: auto; }
+.gmail-settings-card .gmail-actions { margin-top: 18px; }
 .toast { position: fixed; right: 25px; bottom: 25px; z-index: 30; display: flex; align-items: center; gap: 8px; padding: 12px 15px; border: 1px solid var(--ink); background: var(--ink); color: white; box-shadow: 4px 4px 0 var(--yellow); font-size: 11px; }
 .mobile-scrim { display: none; }
 
