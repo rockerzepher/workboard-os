@@ -99,7 +99,7 @@ async function listMessages(accessToken: string, query: string, maxResults = 25)
 
 async function scanMailbox(accessToken: string) {
   const profile = await gmailJson<{ emailAddress?: string }>("profile", accessToken);
-  if (!profile.response.ok) throw new Error("Gmail profile could not be read");
+  if (!profile.response.ok) throw new Error(`Gmail profile could not be read (${profile.response.status})`);
   const sent = await listMessages(accessToken, "in:sent newer_than:7d", 30);
   const incoming = await listMessages(accessToken, "in:inbox newer_than:7d -category:promotions -category:social -category:updates -category:forums", 30);
   const candidates: GmailCandidate[] = [];
