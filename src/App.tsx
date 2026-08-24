@@ -424,7 +424,7 @@ function App() {
     const mode = taskEditor?.mode;
     setTasks((current) => {
       const nextTask: Task = { ...draft, title, container: "today", source: draft.source === "Google Tasks" ? "Google Tasks" : "Manual", successCriteria: draft.role === "main_outcome" ? (draft.successCriteria ?? []).map((criterion) => criterion.trim()).filter(Boolean) : undefined };
-      const withoutRole = nextTask.role ? current.map((task) => task.id === nextTask.id ? task : task.role === nextTask.role ? { ...task, role: null } : task) : current;
+      const withoutRole = nextTask.role && nextTask.role !== "quick_clear" ? current.map((task) => task.id === nextTask.id ? task : task.role === nextTask.role ? { ...task, role: null } : task) : current;
       return mode === "edit" ? withoutRole.map((task) => task.id === nextTask.id ? nextTask : task) : [nextTask, ...withoutRole];
     });
     setTaskEditor(null);
@@ -583,7 +583,7 @@ function App() {
   function setRole(id: string, role: Role) {
     setTasks((current) => current.map((task) => {
       if (task.id === id) return { ...task, role, container: "today" };
-      if (role && task.role === role) return { ...task, role: null };
+      if (role && role !== "quick_clear" && task.role === role) return { ...task, role: null };
       return task;
     }));
     flash(role ? "Daily role updated" : "Daily role cleared");
