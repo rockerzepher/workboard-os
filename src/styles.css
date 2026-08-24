@@ -163,6 +163,8 @@ button:focus-visible, input:focus-visible, select:focus-visible { outline: 2px s
 .today-add-button { color: var(--ink); font: 9px 'DM Mono', monospace; text-transform: uppercase; letter-spacing: .06em; white-space: nowrap; }
 .today-task-actions { display: inline-flex; flex: 0 0 auto; gap: 4px; }
 .today-task-actions .text-button, .today-action-cluster .text-button { padding: 3px 4px; font: 9px 'DM Mono', monospace; text-transform: uppercase; }
+.today-move-control { display: inline-flex; align-items: center; flex: 0 0 auto; gap: 5px; color: var(--muted); font: 9px 'DM Mono', monospace; text-transform: uppercase; letter-spacing: .03em; }
+.today-move-control select { max-width: 155px; border: 0; outline: 0; background: transparent; color: var(--ink); font: 9px 'DM Mono', monospace; text-transform: uppercase; letter-spacing: .03em; cursor: pointer; }
 .danger-text { color: var(--red) !important; }
 .today-action-cluster { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; }
 .today-bulk-toolbar { display: flex; align-items: center; flex-wrap: wrap; gap: 10px; margin-bottom: 8px; padding: 8px 10px; border: 1px solid var(--line); background: var(--soft); color: var(--muted); font: 9px 'DM Mono', monospace; text-transform: uppercase; letter-spacing: .05em; }
