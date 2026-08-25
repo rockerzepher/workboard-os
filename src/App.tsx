@@ -172,7 +172,7 @@ function localTaskFromGoogleRecord(record: GoogleTaskRecord, existing?: Task, go
     id: existing?.id ?? `google-${record.sourceId}`,
     sourceKey: record.sourceKey,
     title: record.title,
-    container: googleTodaySubtask ? "today" : existing?.container ?? googleListContainer(record.listName),
+    container: existing?.container ?? (googleTodaySubtask ? "today" : googleListContainer(record.listName)),
     area: existing?.area ?? "Unassigned",
     project: existing?.project,
     priority: existing?.priority ?? "normal",
@@ -183,7 +183,7 @@ function localTaskFromGoogleRecord(record: GoogleTaskRecord, existing?: Task, go
     notes: record.notes,
     successCriteria: existing?.successCriteria,
     googleParentId: record.parentSourceId,
-    googleTodaySubtask,
+    googleTodaySubtask: existing?.googleTodaySubtask ?? googleTodaySubtask,
     role: existing?.role,
   };
 }

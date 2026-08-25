@@ -66,3 +66,9 @@ The mobile task rows now use a stacked grid: the title receives the readable con
 - Google-backed unassigned Today tasks are sorted by the order of the Google Tasks response; local-only Today tasks remain after the provider-ordered records.
 - The Today tasks section visibly labels the active search control and reports `Google order` when Google-backed records are present.
 - Phone/desktop browser verification confirmed the search field is present, filtering updates the match count, the no-match state appears, and the browser console has no errors. Final result: passed.
+
+## Today dropdown reassignment verification
+
+- Selecting a destination now updates the local container and Today role together.
+- Moving a task out of Phase 1 immediately removes it from that section in the live UI.
+- Google Today subtasks retain a local destination override during later read-only Google merges instead of being forced back into Today. Final result: passed.
