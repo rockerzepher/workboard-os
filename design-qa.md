@@ -60,3 +60,9 @@ The Today screen now follows the supplied structure: integrated rail, date/sync 
 - State: Today view with Phase 1 tasks, task destinations, and task actions visible.
 
 The mobile task rows now use a stacked grid: the title receives the readable content width, duration/source metadata stays compact, and the destination selector and Edit/Remove actions occupy dedicated rows below it. Long task names wrap instead of collapsing into one-word-wide columns. The mobile bulk toolbar also wraps its actions cleanly. Final result: passed.
+
+## Google order and Today search verification
+
+- Google-backed unassigned Today tasks are sorted by the order of the Google Tasks response; local-only Today tasks remain after the provider-ordered records.
+- The Today tasks section visibly labels the active search control and reports `Google order` when Google-backed records are present.
+- Phone/desktop browser verification confirmed the search field is present, filtering updates the match count, the no-match state appears, and the browser console has no errors. Final result: passed.
